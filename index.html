@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AntigravityLifts 5x5 - Premium Workout Tracker</title>
+  <title>AntigravityLifts - Premium Workout Tracker</title>
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <!-- Google Fonts -->
@@ -26,14 +26,7 @@
     <header class="app-header">
       <div class="brand">
         <span class="logo-icon">🏋️‍♂️</span>
-        <h1 class="logo-text">StrongLifts <span>5x5</span></h1>
-      </div>
-      <div class="header-controls">
-        <div class="profile-badge" id="profile-badge">
-          <span class="profile-avatar">👤</span>
-          <span class="profile-name" id="current-user-name">Guest</span>
-          <button class="btn-icon" id="btn-switch-user" title="Switch User">🔄</button>
-        </div>
+        <h1 class="logo-text">Antigravity<span>Lifts</span></h1>
       </div>
     </header>
 
@@ -59,21 +52,6 @@
     <!-- Main Views -->
     <main class="app-main">
       
-      <!-- Profile/User Modal/View -->
-      <section id="view-profile-select" class="profile-select-view hidden">
-        <div class="glass-card">
-          <h2>Select Profile</h2>
-          <p class="subtitle">Choose your profile to sync workouts and progression.</p>
-          <div class="profiles-grid" id="profiles-grid">
-            <!-- Dynamic profile cards -->
-          </div>
-          <div class="new-profile-form">
-            <input type="text" id="new-user-input" placeholder="Create new profile name..." maxlength="20">
-            <button class="btn btn-primary" id="btn-create-user">Add User</button>
-          </div>
-        </div>
-      </section>
-
       <!-- Workout Tab -->
       <section id="tab-workout" class="tab-content active">
         <!-- Choose Workout Panel -->
@@ -261,7 +239,7 @@
               </div>
             </div>
 
-            <!-- Reminders Toggle (mocked) -->
+            <!-- Reminders Toggle -->
             <div class="settings-item">
               <div class="settings-info">
                 <div class="settings-title">Workout Reminders</div>
@@ -273,7 +251,7 @@
               </label>
             </div>
 
-            <!-- Health Connect (mocked) -->
+            <!-- Health Connect -->
             <div class="settings-item">
               <div class="settings-info">
                 <div class="settings-title">Google Health Connect</div>
@@ -282,7 +260,7 @@
               <button class="btn btn-outline btn-sm" id="btn-health-connect" disabled>Set Up Later</button>
             </div>
 
-            <!-- Home Screen Widget (PWA info) -->
+            <!-- Home Screen Widget -->
             <div class="settings-item">
               <div class="settings-info">
                 <div class="settings-title">Add Home Screen Shortcut</div>
@@ -293,7 +271,7 @@
           </div>
         </div>
 
-        <!-- Relocated Import CSV Section -->
+        <!-- CSV Section -->
         <div class="glass-card">
           <h2>Import Workout History (CSV)</h2>
           <p class="subtitle">Upload historical CSV logs to sync dates, weights, and sets.</p>
@@ -312,8 +290,8 @@
 
         <!-- Footer / Version -->
         <div class="settings-footer">
-          <p>AntigravityLifts 5x5 Clone</p>
-          <p class="version">Version 1.1.0</p>
+          <p>AntigravityLifts 5x5 Tracker</p>
+          <p class="version">Version 1.2.0</p>
         </div>
       </section>
 

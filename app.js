@@ -10,28 +10,30 @@ const DEFAULT_WEIGHTS = {
 const EXERCISES_WORKOUT_A = ['Squat', 'Bench Press', 'Barbell Row'];
 const EXERCISES_WORKOUT_B = ['Squat', 'Overhead Press', 'Deadlift'];
 
+// --- Plate Constants ---
+const PLATES_LBS = [45, 35, 25, 10, 5, 2.5];
+const PLATES_KGS = [25, 20, 15, 10, 5, 2.5, 1.25];
+
 // --- State Management ---
 let state = {
-  users: ['Todd', 'Wife'],
-  currentUser: 'Todd',
-  workoutHistory: {}, // { username: [workoutObjects] }
-  currentWeights: {},  // { username: { 'Squat': 45, ... } }
+  workoutHistory: [], // [workoutObjects]
+  currentWeights: { ...DEFAULT_WEIGHTS },
   activeWorkout: null, // { name: 'Workout A', date: string, startTime: number, exercises: [...] }
   restTimer: {
-    duration: 180, // seconds (3 mins)
+    duration: 180,
     timeLeft: 0,
     intervalId: null,
     running: false
   },
   settings: {
-    theme: 'dark',          // 'dark' or 'light'
-    timerEnabled: true,     // auto-trigger rest timer
-    timerDuration: 180,     // duration in seconds
-    unit: 'lb',             // 'lb' or 'kg'
+    theme: 'dark',
+    timerEnabled: true,
+    timerDuration: 180,
+    unit: 'lb',
     reminders: false
   },
-  calendarDate: new Date(), // Date object for calendar view
-  chartInstance: null       // Chart.js object reference
+  calendarDate: new Date(),
+  chartInstance: null
 };
 
 // --- Web Audio Synthesizer for Timer Gong ---
@@ -64,7 +66,7 @@ function playGongSound() {
     const audioEl = document.getElementById('timer-sound');
     if (audioEl) {
       audioEl.currentTime = 0;
-      audioEl.play().catch(e => console.log('Audio element play blocked. Synth succeeded.', e));
+      audioEl.play().catch(e => console.log('Audio element play blocked.', e));
     }
   } catch (err) {
     console.error('Failed to play gong sound:', err);
@@ -73,51 +75,28 @@ function playGongSound() {
 
 // --- Local Storage Helpers ---
 function loadStateFromStorage() {
-  const savedUsers = localStorage.getItem('sl_users');
-  if (savedUsers) {
-    state.users = JSON.parse(savedUsers);
-  }
-  
-  const savedCurrentUser = localStorage.getItem('sl_current_user');
-  if (savedCurrentUser && state.users.includes(savedCurrentUser)) {
-    state.currentUser = savedCurrentUser;
-  } else {
-    state.currentUser = state.users[0] || 'Todd';
-  }
-
-  const savedHistory = localStorage.getItem('sl_history');
+  const savedHistory = localStorage.getItem('al_history');
   if (savedHistory) {
     state.workoutHistory = JSON.parse(savedHistory);
   }
 
-  const savedWeights = localStorage.getItem('sl_weights');
+  const savedWeights = localStorage.getItem('al_weights');
   if (savedWeights) {
     state.currentWeights = JSON.parse(savedWeights);
   }
 
-  const savedSettings = localStorage.getItem('sl_settings');
+  const savedSettings = localStorage.getItem('al_settings');
   if (savedSettings) {
     state.settings = { ...state.settings, ...JSON.parse(savedSettings) };
   }
 
-  // Ensure current user has defaults
-  if (!state.workoutHistory[state.currentUser]) {
-    state.workoutHistory[state.currentUser] = [];
-  }
-  if (!state.currentWeights[state.currentUser]) {
-    state.currentWeights[state.currentUser] = { ...DEFAULT_WEIGHTS };
-  }
-
-  // Apply visual theme immediately
   applyTheme();
 }
 
 function saveStateToStorage() {
-  localStorage.setItem('sl_users', JSON.stringify(state.users));
-  localStorage.setItem('sl_current_user', state.currentUser);
-  localStorage.setItem('sl_history', JSON.stringify(state.workoutHistory));
-  localStorage.setItem('sl_weights', JSON.stringify(state.currentWeights));
-  localStorage.setItem('sl_settings', JSON.stringify(state.settings));
+  localStorage.setItem('al_history', JSON.stringify(state.workoutHistory));
+  localStorage.setItem('al_weights', JSON.stringify(state.currentWeights));
+  localStorage.setItem('al_settings', JSON.stringify(state.settings));
 }
 
 // --- Theme Helper ---
@@ -141,13 +120,10 @@ function formatWeight(lbVal) {
 
 // --- UI Helpers ---
 function showView(viewId) {
-  // Hide all main views
   document.querySelectorAll('.tab-content').forEach(view => {
     view.classList.add('hidden');
   });
-  document.getElementById('view-profile-select').classList.add('hidden');
 
-  // Activate tab buttons
   document.querySelectorAll('.nav-tab').forEach(tab => {
     if (tab.getAttribute('data-tab') === viewId) {
       tab.classList.add('active');
@@ -156,13 +132,11 @@ function showView(viewId) {
     }
   });
 
-  // Show selected view
   const targetView = document.getElementById(viewId);
   if (targetView) {
     targetView.classList.remove('hidden');
   }
 
-  // Trigger charts rendering when entering progress view
   if (viewId === 'tab-progress') {
     renderProgressChart();
   }
@@ -174,7 +148,6 @@ function startRestTimer(seconds) {
   
   stopRestTimer();
   
-  // Show timer widget
   const timerWidget = document.getElementById('rest-timer-widget');
   timerWidget.classList.remove('hidden');
 
@@ -231,7 +204,6 @@ function updateTimerDisplay() {
 function initWorkout(workoutName) {
   const dateObj = new Date();
   const exercisesList = workoutName === 'Workout A' ? EXERCISES_WORKOUT_A : EXERCISES_WORKOUT_B;
-  const userWeights = state.currentWeights[state.currentUser];
 
   state.activeWorkout = {
     name: workoutName,
@@ -243,9 +215,12 @@ function initWorkout(workoutName) {
       const setsCount = isDeadlift ? 1 : 5;
       return {
         name: name,
-        weight: userWeights[name] || DEFAULT_WEIGHTS[name],
+        weight: state.currentWeights[name] || DEFAULT_WEIGHTS[name],
         setsCount: setsCount,
-        sets: Array(setsCount).fill(null)
+        sets: Array(setsCount).fill(null),
+        isWarmupMode: false,
+        showPlateCalculator: false,
+        warmupSets: [] // Generated when entering warmup mode
       };
     })
   };
@@ -259,6 +234,70 @@ function initWorkout(workoutName) {
   document.getElementById('active-workout-panel').classList.remove('hidden');
 }
 
+// Barbell Plate Math
+function getPlatesForWeight(weight) {
+  const isLb = state.settings.unit === 'lb';
+  const barWeight = isLb ? 45 : 20;
+  const availablePlates = isLb ? PLATES_LBS : PLATES_KGS;
+
+  if (weight <= barWeight) {
+    return [];
+  }
+
+  let sideWeight = (weight - barWeight) / 2;
+  const platesNeeded = [];
+
+  for (const plate of availablePlates) {
+    while (sideWeight >= plate) {
+      platesNeeded.push(plate);
+      sideWeight -= plate;
+      // Precision margin correction
+      if (sideWeight < 0.1) sideWeight = 0;
+    }
+  }
+
+  return platesNeeded;
+}
+
+// Warmup Progression Math
+function generateWarmups(exercise) {
+  const isLb = state.settings.unit === 'lb';
+  const barWeight = isLb ? 45 : 20;
+  const targetWeight = exercise.weight;
+  
+  if (targetWeight <= barWeight) {
+    return [{ weight: barWeight, reps: 5, completed: false }];
+  }
+
+  const steps = [];
+  // 2 sets with empty bar
+  steps.push({ weight: barWeight, reps: 5, completed: false });
+  steps.push({ weight: barWeight, reps: 5, completed: false });
+
+  // 50% working weight
+  let w50 = targetWeight * 0.5;
+  w50 = isLb ? Math.round(w50 / 5) * 5 : Math.round(w50 / 2.5) * 2.5;
+  if (w50 > barWeight) {
+    steps.push({ weight: Math.min(w50, targetWeight - 10), reps: 5, completed: false });
+  }
+
+  // 70% working weight
+  let w70 = targetWeight * 0.7;
+  w70 = isLb ? Math.round(w70 / 5) * 5 : Math.round(w70 / 2.5) * 2.5;
+  if (w70 > w50) {
+    steps.push({ weight: Math.min(w70, targetWeight - 5), reps: 3, completed: false });
+  }
+
+  // 90% working weight
+  let w90 = targetWeight * 0.9;
+  w90 = isLb ? Math.round(w90 / 5) * 5 : Math.round(w90 / 2.5) * 2.5;
+  if (w90 > w70) {
+    steps.push({ weight: Math.min(w90, targetWeight - 5), reps: 2, completed: false });
+  }
+
+  return steps;
+}
+
 function renderActiveExercises() {
   const listEl = document.getElementById('exercises-list');
   listEl.innerHTML = '';
@@ -267,45 +306,121 @@ function renderActiveExercises() {
     const card = document.createElement('div');
     card.className = 'exercise-card';
 
-    const header = document.createElement('div');
-    header.className = 'exercise-info';
-
-    const left = document.createElement('div');
-    left.innerHTML = `
-      <div class="exercise-title">${exercise.name}</div>
-      <div class="exercise-scheme">${exercise.setsCount}x5</div>
+    // Header top row (Name, Warmup selector)
+    const headerTop = document.createElement('div');
+    headerTop.className = 'exercise-header-top';
+    headerTop.innerHTML = `
+      <div class="exercise-header-left">
+        <div class="exercise-title">${exercise.name}</div>
+        <div class="exercise-scheme">${exercise.isWarmupMode ? 'Warmup' : exercise.setsCount + 'x5 working'}</div>
+      </div>
+      <div class="exercise-header-right">
+        <button class="btn-warmup-toggle ${exercise.isWarmupMode ? 'active' : ''}" onclick="toggleWarmupMode(${exIndex})">
+          ${exercise.isWarmupMode ? 'Working Sets' : 'Warmups'}
+        </button>
+      </div>
     `;
+    card.appendChild(headerTop);
 
-    const right = document.createElement('div');
-    right.className = 'weight-controller';
-    right.innerHTML = `
-      <button class="weight-btn" onclick="adjustWeight(${exIndex}, -5)">-5</button>
-      <span class="weight-value">${formatWeight(exercise.weight)}</span>
-      <button class="weight-btn" onclick="adjustWeight(${exIndex}, 5)">+5</button>
+    // Weight and settings controls
+    const controlsRow = document.createElement('div');
+    controlsRow.className = 'exercise-header-top';
+    
+    // Weight value clicking toggles plate calculator
+    const displayWeight = state.settings.unit === 'kg' ? Math.round(exercise.weight * 0.45359237) : exercise.weight;
+    
+    controlsRow.innerHTML = `
+      <div class="weight-controller">
+        <button class="weight-btn" onclick="adjustWeight(${exIndex}, -5)">-5</button>
+        <span class="weight-value" onclick="togglePlateCalculator(${exIndex})" title="Click to view Plate Calculator">
+          ${formatWeight(exercise.weight)}
+        </span>
+        <button class="weight-btn" onclick="adjustWeight(${exIndex}, 5)">+5</button>
+      </div>
+      <span style="font-size: 0.75rem; color: var(--text-secondary);">Click weight for plates</span>
     `;
+    card.appendChild(controlsRow);
 
-    header.appendChild(left);
-    header.appendChild(right);
-    card.appendChild(header);
+    // Render plate calculator inline if expanded
+    if (exercise.showPlateCalculator) {
+      const plateCalc = document.createElement('div');
+      plateCalc.className = 'plate-calculator-view';
+      
+      const plates = getPlatesForWeight(displayWeight);
+      let platesHTML = '';
+      if (plates.length === 0) {
+        platesHTML = `<span style="font-size:0.85rem; color:var(--text-secondary);">Barbell only (${state.settings.unit === 'kg' ? '20kg' : '45lb'})</span>`;
+      } else {
+        plates.forEach(p => {
+          // Normalize formatting class
+          const classStr = String(p).replace('.', '-');
+          platesHTML += `<div class="plate-badge p${classStr}">${p}</div>`;
+        });
+      }
 
+      plateCalc.innerHTML = `
+        <div class="plate-calc-title">Load on each side</div>
+        <div class="plates-row">
+          ${platesHTML}
+        </div>
+        <div class="barbell-indicator">Total Weight includes barbell.</div>
+      `;
+      card.appendChild(plateCalc);
+    }
+
+    // Render set circle grid
     const setsRow = document.createElement('div');
     setsRow.className = 'sets-row';
 
-    exercise.sets.forEach((repCount, setIndex) => {
-      const circle = document.createElement('div');
-      circle.className = 'set-circle';
-      if (repCount === 5) {
-        circle.classList.add('completed');
-      } else if (repCount !== null && repCount < 5) {
-        circle.classList.add('failed');
+    if (exercise.isWarmupMode) {
+      if (exercise.warmupSets.length === 0) {
+        exercise.warmupSets = generateWarmups(exercise);
       }
-      circle.textContent = repCount === null ? '' : repCount;
-      circle.addEventListener('click', () => {
-        cycleRepCount(exIndex, setIndex);
-      });
 
-      setsRow.appendChild(circle);
-    });
+      exercise.warmupSets.forEach((wset, wIndex) => {
+        const circle = document.createElement('div');
+        circle.className = 'set-circle';
+        
+        const wDisplayWeight = state.settings.unit === 'kg' ? Math.round(wset.weight * 0.45359237) : wset.weight;
+        const formattedW = state.settings.unit === 'kg' ? `${wDisplayWeight}k` : `${wDisplayWeight}`;
+
+        if (wset.completed) {
+          circle.classList.add('completed');
+          circle.textContent = wset.reps;
+        } else {
+          // Show weight & reps inside circle
+          circle.style.fontSize = '0.75rem';
+          circle.style.flexDirection = 'column';
+          circle.innerHTML = `<span>${formattedW}</span><span style="font-size:0.6rem; opacity:0.7;">x${wset.reps}</span>`;
+        }
+
+        circle.addEventListener('click', () => {
+          wset.completed = !wset.completed;
+          renderActiveExercises();
+          if (wset.completed) {
+            // shorter timer for warmup sets (60 seconds)
+            startRestTimer(60);
+          }
+        });
+        setsRow.appendChild(circle);
+      });
+    } else {
+      // Working sets 5x5
+      exercise.sets.forEach((repCount, setIndex) => {
+        const circle = document.createElement('div');
+        circle.className = 'set-circle';
+        if (repCount === 5) {
+          circle.classList.add('completed');
+        } else if (repCount !== null && repCount < 5) {
+          circle.classList.add('failed');
+        }
+        circle.textContent = repCount === null ? '' : repCount;
+        circle.addEventListener('click', () => {
+          cycleRepCount(exIndex, setIndex);
+        });
+        setsRow.appendChild(circle);
+      });
+    }
 
     card.appendChild(setsRow);
     listEl.appendChild(card);
@@ -315,6 +430,27 @@ function renderActiveExercises() {
 window.adjustWeight = function(exIndex, delta) {
   if (!state.activeWorkout) return;
   state.activeWorkout.exercises[exIndex].weight = Math.max(0, state.activeWorkout.exercises[exIndex].weight + delta);
+  // regenerate warmups if changed
+  if (state.activeWorkout.exercises[exIndex].isWarmupMode) {
+    state.activeWorkout.exercises[exIndex].warmupSets = generateWarmups(state.activeWorkout.exercises[exIndex]);
+  }
+  renderActiveExercises();
+};
+
+window.toggleWarmupMode = function(exIndex) {
+  if (!state.activeWorkout) return;
+  const ex = state.activeWorkout.exercises[exIndex];
+  ex.isWarmupMode = !ex.isWarmupMode;
+  if (ex.isWarmupMode && ex.warmupSets.length === 0) {
+    ex.warmupSets = generateWarmups(ex);
+  }
+  renderActiveExercises();
+};
+
+window.togglePlateCalculator = function(exIndex) {
+  if (!state.activeWorkout) return;
+  const ex = state.activeWorkout.exercises[exIndex];
+  ex.showPlateCalculator = !ex.showPlateCalculator;
   renderActiveExercises();
 };
 
@@ -353,7 +489,7 @@ function finishWorkout() {
       
       if (allSetsSuccessful) {
         const increment = ex.name === 'Deadlift' ? 10 : 5;
-        state.currentWeights[state.currentUser][ex.name] = (state.currentWeights[state.currentUser][ex.name] || DEFAULT_WEIGHTS[ex.name]) + increment;
+        state.currentWeights[ex.name] = (state.currentWeights[ex.name] || DEFAULT_WEIGHTS[ex.name]) + increment;
       }
 
       return {
@@ -364,8 +500,8 @@ function finishWorkout() {
     })
   };
 
-  state.workoutHistory[state.currentUser].push(workoutObj);
-  state.workoutHistory[state.currentUser].sort((a, b) => new Date(b.date) - new Date(a.date));
+  state.workoutHistory.push(workoutObj);
+  state.workoutHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
 
   saveStateToStorage();
   state.activeWorkout = null;
@@ -392,7 +528,7 @@ function cancelActiveWorkout() {
 }
 
 function updateWorkoutSuggestion() {
-  const history = state.workoutHistory[state.currentUser] || [];
+  const history = state.workoutHistory || [];
   const suggestionText = document.getElementById('workout-suggestion-text');
   
   if (history.length === 0) {
@@ -408,16 +544,25 @@ function updateWorkoutSuggestion() {
   }
 }
 
-// --- History List rendering ---
+// --- History List rendering & Deleting ---
+window.deleteHistoryWorkout = function(index) {
+  if (confirm("Are you sure you want to delete this workout session? This cannot be undone.")) {
+    state.workoutHistory.splice(index, 1);
+    saveStateToStorage();
+    renderHistory();
+    renderCalendar();
+  }
+};
+
 function renderHistory() {
   const container = document.getElementById('history-list');
   const statsOverview = document.getElementById('stats-overview');
-  const history = state.workoutHistory[state.currentUser] || [];
+  const history = state.workoutHistory || [];
 
   container.innerHTML = '';
   
   if (history.length === 0) {
-    container.innerHTML = `<div style="text-align:center; padding: 20px; color:var(--text-secondary);">No workouts logged yet. Upload a CSV inside Settings to import logs!</div>`;
+    container.innerHTML = `<div style="text-align:center; padding: 20px; color:var(--text-secondary);">No workouts logged yet. Go to Settings to import your history CSV!</div>`;
     statsOverview.innerHTML = '';
     return;
   }
@@ -454,7 +599,7 @@ function renderHistory() {
     </div>
   `;
 
-  history.forEach(workout => {
+  history.forEach((workout, index) => {
     const item = document.createElement('div');
     item.className = 'history-item';
 
@@ -467,7 +612,10 @@ function renderHistory() {
 
     header.innerHTML = `
       <span class="history-item-date">${formattedDate}</span>
-      <span class="history-item-name">${workout.workoutName}</span>
+      <div class="history-header-meta">
+        <span class="history-item-name">${workout.workoutName}</span>
+        <button class="history-delete-btn" onclick="deleteHistoryWorkout(${index})" title="Delete session">🗑️</button>
+      </div>
     `;
     item.appendChild(header);
 
@@ -496,7 +644,7 @@ function renderHistory() {
 function renderCalendar() {
   const grid = document.getElementById('calendar-grid');
   const monthTitle = document.getElementById('cal-month-title');
-  const history = state.workoutHistory[state.currentUser] || [];
+  const history = state.workoutHistory || [];
 
   grid.innerHTML = '';
   
@@ -577,7 +725,7 @@ function showCalendarDayDetail(dateStr, workouts) {
 
 // --- Chart.js Rendering Logic ---
 function renderProgressChart() {
-  const history = state.workoutHistory[state.currentUser] || [];
+  const history = state.workoutHistory || [];
   const exercise = document.getElementById('progress-exercise-select').value;
   const timeframe = document.querySelector('#timeframe-filters .filter-pill.active').getAttribute('data-timeframe');
   const metric = document.querySelector('input[name="metric"]:checked').value;
@@ -585,7 +733,6 @@ function renderProgressChart() {
   const canvas = document.getElementById('progress-chart');
   if (!canvas) return;
 
-  // Clean old chart instance
   if (state.chartInstance) {
     state.chartInstance.destroy();
     state.chartInstance = null;
@@ -601,7 +748,6 @@ function renderProgressChart() {
     return;
   }
 
-  // Filter history by timeframe
   const now = new Date();
   let boundaryDate = new Date();
   
@@ -610,12 +756,9 @@ function renderProgressChart() {
   else if (timeframe === '6m') boundaryDate.setMonth(now.getMonth() - 6);
   else if (timeframe === '1y') boundaryDate.setFullYear(now.getFullYear() - 1);
   else if (timeframe === '2y') boundaryDate.setFullYear(now.getFullYear() - 2);
-  else boundaryDate = new Date(0); // All time / max
+  else boundaryDate = new Date(0); 
 
-  // Collect data points chronologically (oldest to newest)
   const chartPoints = [];
-  
-  // Sort workouts oldest first for graph
   const chronologicalHistory = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
 
   chronologicalHistory.forEach(w => {
@@ -628,7 +771,6 @@ function renderProgressChart() {
     let value = 0;
     let rawWeight = matchedEx.weight;
 
-    // Convert weights if set to kgs
     let displayedWeight = rawWeight;
     if (state.settings.unit === 'kg') {
       displayedWeight = Math.round(rawWeight * 0.45359237);
@@ -637,10 +779,8 @@ function renderProgressChart() {
     if (metric === 'weight') {
       value = displayedWeight;
     } else if (metric === 'e1rm') {
-      // Find top/max reps set
       const maxReps = Math.max(...matchedEx.sets.filter(r => r !== null), 0);
       if (maxReps > 0) {
-        // formula: weight * (1 + reps/30)
         value = Math.round(displayedWeight * (1 + maxReps / 30));
       } else {
         value = displayedWeight;
@@ -669,8 +809,7 @@ function renderProgressChart() {
     return;
   }
 
-  // Draw chart using Chart.js
-  const primaryAccent = state.settings.theme === 'light' ? '#00e676' : '#00e676';
+  const primaryAccent = '#00e676';
   const labelColor = state.settings.theme === 'light' ? '#4b5563' : '#9ca3af';
   const gridColor = state.settings.theme === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
 
@@ -679,7 +818,7 @@ function renderProgressChart() {
     data: {
       labels: chartPoints.map(p => p.date),
       datasets: [{
-        label: `${exercise} - ${metric.toUpperCase()} (${state.settings.unit === 'kg' && metric !== 'reps' ? 'kg' : metric === 'reps' ? 'count' : 'lb'})`,
+        label: `${exercise} - ${metric.toUpperCase()}`,
         data: chartPoints.map(p => p.val),
         borderColor: primaryAccent,
         backgroundColor: 'rgba(0, 230, 118, 0.08)',
@@ -730,43 +869,6 @@ function renderProgressChart() {
         }
       }
     }
-  });
-}
-
-// --- Profile Switching ---
-function renderProfileSelector() {
-  const grid = document.getElementById('profiles-grid');
-  grid.innerHTML = '';
-
-  state.users.forEach(username => {
-    const card = document.createElement('div');
-    card.className = `profile-card ${state.currentUser === username ? 'active' : ''}`;
-    card.innerHTML = `
-      <span class="avatar">👤</span>
-      <span class="name">${username}</span>
-    `;
-
-    card.addEventListener('click', () => {
-      state.currentUser = username;
-      if (!state.workoutHistory[state.currentUser]) {
-        state.workoutHistory[state.currentUser] = [];
-      }
-      if (!state.currentWeights[state.currentUser]) {
-        state.currentWeights[state.currentUser] = { ...DEFAULT_WEIGHTS };
-      }
-      
-      saveStateToStorage();
-      document.getElementById('current-user-name').textContent = username;
-      
-      updateWorkoutSuggestion();
-      renderHistory();
-      renderCalendar();
-      
-      document.getElementById('view-profile-select').classList.add('hidden');
-      document.getElementById('tab-workout').classList.remove('hidden');
-    });
-
-    grid.appendChild(card);
   });
 }
 
@@ -881,39 +983,35 @@ function handleCSVImport(fileText) {
   parsedWorkoutsToImport = Object.values(workoutsMap);
   parsedWorkoutsToImport.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  document.getElementById('import-status-text').textContent = `Parsed ${parsedWorkoutsToImport.length} workouts from CSV file. Press confirm below to import into ${state.currentUser}'s history.`;
+  document.getElementById('import-status-text').textContent = `Parsed ${parsedWorkoutsToImport.length} workouts from CSV file. Press confirm below to import into your logs.`;
   document.getElementById('import-preview').classList.remove('hidden');
 }
 
 function executeImport() {
   if (parsedWorkoutsToImport.length === 0) return;
 
-  if (!state.workoutHistory[state.currentUser]) {
-    state.workoutHistory[state.currentUser] = [];
-  }
-
-  const existingDates = new Set(state.workoutHistory[state.currentUser].map(w => w.date));
+  const existingDates = new Set(state.workoutHistory.map(w => w.date));
   let importedCount = 0;
   let skippedCount = 0;
 
   parsedWorkoutsToImport.forEach(w => {
     if (!existingDates.has(w.date)) {
-      state.workoutHistory[state.currentUser].push(w);
+      state.workoutHistory.push(w);
       importedCount++;
     } else {
       skippedCount++;
     }
   });
 
-  state.workoutHistory[state.currentUser].sort((a, b) => new Date(b.date) - new Date(a.date));
+  state.workoutHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const lastWorkouts = [...state.workoutHistory[state.currentUser]];
+  const lastWorkouts = [...state.workoutHistory];
   const exerciseFound = new Set();
   
   for (const workout of lastWorkouts) {
     workout.exercises.forEach(ex => {
       if (!exerciseFound.has(ex.name)) {
-        state.currentWeights[state.currentUser][ex.name] = ex.weight;
+        state.currentWeights[ex.name] = ex.weight;
         exerciseFound.add(ex.name);
       }
     });
@@ -938,14 +1036,17 @@ function executeImport() {
 document.addEventListener('DOMContentLoaded', () => {
   loadStateFromStorage();
   
-  document.getElementById('current-user-name').textContent = state.currentUser;
+  // Register Offline Service Worker (PWA feature)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('PWA Service Worker Registered Successfully.'))
+      .catch(err => console.log('Service Worker registration failed: ', err));
+  }
 
-  // Apply inputs defaults based on loaded settings
   document.getElementById('setting-timer-toggle').checked = state.settings.timerEnabled;
   document.getElementById('setting-timer-duration').value = state.settings.timerDuration;
   document.getElementById('setting-reminder-toggle').checked = state.settings.reminders;
   
-  // Highlight unit select button
   if (state.settings.unit === 'kg') {
     document.getElementById('unit-kg-btn').classList.add('active');
     document.getElementById('unit-lb-btn').classList.remove('active');
@@ -960,32 +1061,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const tabId = tab.getAttribute('data-tab');
       showView(tabId);
     });
-  });
-
-  // Switch User Dialog toggle
-  document.getElementById('btn-switch-user').addEventListener('click', () => {
-    renderProfileSelector();
-    document.querySelectorAll('.tab-content').forEach(view => view.classList.add('hidden'));
-    document.getElementById('view-profile-select').classList.remove('hidden');
-  });
-
-  // New Profile Creator
-  document.getElementById('btn-create-user').addEventListener('click', () => {
-    const input = document.getElementById('new-user-input');
-    const name = input.value.trim();
-    if (name) {
-      if (state.users.includes(name)) {
-        alert("Profile already exists.");
-        return;
-      }
-      state.users.push(name);
-      state.workoutHistory[name] = [];
-      state.currentWeights[name] = { ...DEFAULT_WEIGHTS };
-      
-      saveStateToStorage();
-      input.value = '';
-      renderProfileSelector();
-    }
   });
 
   // Start Workout buttons
@@ -1045,9 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.settings.theme = state.settings.theme === 'light' ? 'dark' : 'light';
     applyTheme();
     saveStateToStorage();
-    if (document.getElementById('tab-progress').classList.contains('active') === false) {
-      // redraw if on progress tab to refresh colors
-    } else {
+    if (document.getElementById('tab-progress').classList.contains('active')) {
       renderProgressChart();
     }
   });
