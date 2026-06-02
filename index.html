@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AntigravityLifts 5x5 - Premium Workout Tracker</title>
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+  <!-- Audio element for Timer gong -->
+  <audio id="timer-sound" preload="auto">
+    <source src="https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav" type="audio/wav">
+  </audio>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="logo-icon">🏋️‍♂️</span>
+        <h1 class="logo-text">StrongLifts <span>5x5</span></h1>
+      </div>
+      <div class="header-controls">
+        <div class="profile-badge" id="profile-badge">
+          <span class="profile-avatar">👤</span>
+          <span class="profile-name" id="current-user-name">Guest</span>
+          <button class="btn-icon" id="btn-switch-user" title="Switch User">🔄</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="app-nav">
+      <button class="nav-tab active" data-tab="tab-workout">
+        <span class="tab-icon">💪</span> Workout
+      </button>
+      <button class="nav-tab" data-tab="tab-history">
+        <span class="tab-icon">📜</span> History
+      </button>
+      <button class="nav-tab" data-tab="tab-calendar">
+        <span class="tab-icon">📅</span> Calendar
+      </button>
+      <button class="nav-tab" data-tab="tab-progress">
+        <span class="tab-icon">📈</span> Progress
+      </button>
+      <button class="nav-tab" data-tab="tab-settings">
+        <span class="tab-icon">⚙️</span> Settings
+      </button>
+    </nav>
+
+    <!-- Main Views -->
+    <main class="app-main">
+      
+      <!-- Profile/User Modal/View -->
+      <section id="view-profile-select" class="profile-select-view hidden">
+        <div class="glass-card">
+          <h2>Select Profile</h2>
+          <p class="subtitle">Choose your profile to sync workouts and progression.</p>
+          <div class="profiles-grid" id="profiles-grid">
+            <!-- Dynamic profile cards -->
+          </div>
+          <div class="new-profile-form">
+            <input type="text" id="new-user-input" placeholder="Create new profile name..." maxlength="20">
+            <button class="btn btn-primary" id="btn-create-user">Add User</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Workout Tab -->
+      <section id="tab-workout" class="tab-content active">
+        <!-- Choose Workout Panel -->
+        <div class="workout-setup-panel" id="workout-setup-panel">
+          <div class="glass-card header-card">
+            <h2>Select Today's Workout</h2>
+            <p class="subtitle" id="workout-suggestion-text">Suggested: Loading schedule...</p>
+            <div class="workout-choices">
+              <button class="workout-choice-btn" id="btn-choose-a">
+                <h3>Workout A</h3>
+                <ul>
+                  <li>Squat (5x5)</li>
+                  <li>Bench Press (5x5)</li>
+                  <li>Barbell Row (5x5)</li>
+                </ul>
+              </button>
+              <button class="workout-choice-btn" id="btn-choose-b">
+                <h3>Workout B</h3>
+                <ul>
+                  <li>Squat (5x5)</li>
+                  <li>Overhead Press (5x5)</li>
+                  <li>Deadlift (1x5)</li>
+                </ul>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Workout Session -->
+        <div class="active-workout-panel hidden" id="active-workout-panel">
+          <div class="session-header">
+            <div>
+              <h2 id="active-workout-title">Workout A</h2>
+              <p class="subtitle" id="active-workout-date">Tuesday, June 2</p>
+            </div>
+            <div class="session-actions">
+              <button class="btn btn-danger" id="btn-cancel-workout">Cancel</button>
+              <button class="btn btn-success" id="btn-finish-workout">Finish Workout</button>
+            </div>
+          </div>
+
+          <!-- Exercises List -->
+          <div class="exercises-container" id="exercises-list">
+            <!-- Dynamic active exercises here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- History Tab (List view) -->
+      <section id="tab-history" class="tab-content hidden">
+        <div class="glass-card">
+          <div class="card-header">
+            <h2>Workout Log</h2>
+            <div class="stats-overview" id="stats-overview">
+              <!-- Dynamically loaded quick statistics -->
+            </div>
+          </div>
+          <div class="history-list" id="history-list">
+            <!-- Dynamic workout lists -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Calendar Tab -->
+      <section id="tab-calendar" class="tab-content hidden">
+        <div class="glass-card">
+          <div class="calendar-header">
+            <button class="btn-icon" id="cal-prev-month">◀</button>
+            <h2 id="cal-month-title">June 2026</h2>
+            <button class="btn-icon" id="cal-next-month">▶</button>
+          </div>
+          <div class="calendar-grid-header">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div class="calendar-grid" id="calendar-grid">
+            <!-- Days populated dynamically -->
+          </div>
+          <div class="calendar-detail-panel hidden" id="calendar-detail-panel">
+            <h3>Workout Details</h3>
+            <div id="calendar-detail-content"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Progress Tab -->
+      <section id="tab-progress" class="tab-content hidden">
+        <div class="glass-card">
+          <div class="progress-controls">
+            <h2>Lifting Progress</h2>
+            <p class="subtitle">Track your strength progression over time.</p>
+            
+            <div class="control-row">
+              <label for="progress-exercise-select">Exercise</label>
+              <select id="progress-exercise-select" class="form-select">
+                <option value="Squat">Squat</option>
+                <option value="Bench Press">Bench Press</option>
+                <option value="Barbell Row">Barbell Row</option>
+                <option value="Overhead Press">Overhead Press</option>
+                <option value="Deadlift">Deadlift</option>
+              </select>
+            </div>
+
+            <div class="filter-pills-row" id="timeframe-filters">
+              <button class="filter-pill" data-timeframe="1m">1M</button>
+              <button class="filter-pill" data-timeframe="3m">3M</button>
+              <button class="filter-pill active" data-timeframe="6m">6M</button>
+              <button class="filter-pill" data-timeframe="1y">1Y</button>
+              <button class="filter-pill" data-timeframe="2y">2Y</button>
+              <button class="filter-pill" data-timeframe="max">MAX</button>
+            </div>
+
+            <div class="checkbox-metrics-row">
+              <label class="check-container">
+                <input type="radio" name="metric" value="weight" checked>
+                <span class="checkmark"></span> Weight
+              </label>
+              <label class="check-container">
+                <input type="radio" name="metric" value="e1rm">
+                <span class="checkmark"></span> e1RM
+              </label>
+              <label class="check-container">
+                <input type="radio" name="metric" value="volume">
+                <span class="checkmark"></span> Volume
+              </label>
+              <label class="check-container">
+                <input type="radio" name="metric" value="reps">
+                <span class="checkmark"></span> Reps
+              </label>
+            </div>
+          </div>
+
+          <div class="chart-wrapper">
+            <canvas id="progress-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Tab -->
+      <section id="tab-settings" class="tab-content hidden">
+        <!-- Application Settings -->
+        <div class="glass-card">
+          <h2>Application Settings</h2>
+          <p class="subtitle">Customize preferences and import history.</p>
+
+          <div class="settings-list">
+            <!-- Theme Mode -->
+            <div class="settings-item">
+              <div class="settings-info">
+                <div class="settings-title">Visual Theme</div>
+                <div class="settings-desc">Switch between light and dark display modes.</div>
+              </div>
+              <button class="btn btn-outline btn-sm" id="btn-toggle-theme">Toggle Theme</button>
+            </div>
+
+            <!-- Rest Timer Settings -->
+            <div class="settings-item">
+              <div class="settings-info">
+                <div class="settings-title">Rest Timer</div>
+                <div class="settings-desc">Auto-start rest countdown between exercise sets.</div>
+              </div>
+              <div class="settings-action-row">
+                <label class="switch">
+                  <input type="checkbox" id="setting-timer-toggle" checked>
+                  <span class="slider"></span>
+                </label>
+                <select id="setting-timer-duration" class="form-select form-select-sm">
+                  <option value="60">1 Min</option>
+                  <option value="90">1.5 Mins</option>
+                  <option value="120">2 Mins</option>
+                  <option value="180" selected>3 Mins</option>
+                  <option value="300">5 Mins</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Weight Units -->
+            <div class="settings-item">
+              <div class="settings-info">
+                <div class="settings-title">Weight Unit</div>
+                <div class="settings-desc">Select default system units (LBS vs KGS).</div>
+              </div>
+              <div class="btn-group">
+                <button class="btn btn-outline btn-sm active" id="unit-lb-btn">LBS</button>
+                <button class="btn btn-outline btn-sm" id="unit-kg-btn">KGS</button>
+              </div>
+            </div>
+
+            <!-- Reminders Toggle (mocked) -->
+            <div class="settings-item">
+              <div class="settings-info">
+                <div class="settings-title">Workout Reminders</div>
+                <div class="settings-desc">Get notifications on scheduled lifting days.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="setting-reminder-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Health Connect (mocked) -->
+            <div class="settings-item">
+              <div class="settings-info">
+                <div class="settings-title">Google Health Connect</div>
+                <div class="settings-desc">Sync metrics automatically to Android device.</div>
+              </div>
+              <button class="btn btn-outline btn-sm" id="btn-health-connect" disabled>Set Up Later</button>
+            </div>
+
+            <!-- Home Screen Widget (PWA info) -->
+            <div class="settings-item">
+              <div class="settings-info">
+                <div class="settings-title">Add Home Screen Shortcut</div>
+                <div class="settings-desc">Run as a standalone app without browser searchbars.</div>
+              </div>
+              <button class="btn btn-outline btn-sm" id="btn-pwa-install">Show Steps</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Relocated Import CSV Section -->
+        <div class="glass-card">
+          <h2>Import Workout History (CSV)</h2>
+          <p class="subtitle">Upload historical CSV logs to sync dates, weights, and sets.</p>
+          <div class="drop-zone" id="csv-drop-zone">
+            <span class="drop-icon">📄</span>
+            <p>Drag & drop your CSV file here, or click to browse</p>
+            <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+          </div>
+          <div class="import-preview hidden" id="import-preview">
+            <div class="alert alert-info">
+              <span id="import-status-text">Loaded file...</span>
+            </div>
+            <button class="btn btn-primary" id="btn-confirm-import">Process & Import Workouts</button>
+          </div>
+        </div>
+
+        <!-- Footer / Version -->
+        <div class="settings-footer">
+          <p>AntigravityLifts 5x5 Clone</p>
+          <p class="version">Version 1.1.0</p>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Rest Timer Widget (Overlay) -->
+    <div class="rest-timer-widget hidden" id="rest-timer-widget">
+      <div class="timer-inner">
+        <div class="timer-radial">
+          <svg class="progress-ring" width="120" height="120">
+            <circle class="progress-ring__circle-bg" stroke="rgba(255,255,255,0.1)" stroke-width="6" fill="transparent" r="52" cx="60" cy="60"/>
+            <circle class="progress-ring__circle" stroke="#00e676" stroke-width="6" fill="transparent" r="52" cx="60" cy="60" id="timer-progress-ring"/>
+          </svg>
+          <div class="timer-text" id="timer-display">03:00</div>
+        </div>
+        <div class="timer-controls">
+          <button class="btn btn-sm btn-outline" id="timer-btn-minus">-30s</button>
+          <button class="btn btn-sm btn-outline" id="timer-btn-plus">+30s</button>
+          <button class="btn btn-sm btn-danger" id="timer-btn-skip">Skip</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
