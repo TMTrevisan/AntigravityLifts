@@ -110,12 +110,37 @@ function applyTheme() {
   }
 }
 
-// --- Unit Format Helper ---
-function formatWeight(lbVal) {
-  if (state.settings.unit === 'kg') {
-    return `${Math.round(lbVal * 0.45359237)} kg`;
+// --- Unit Convert & Format Helper ---
+function formatWeight(val) {
+  return `${val} ${state.settings.unit}`;
+}
+
+function convertStateWeights(targetUnit) {
+  // Convert currentWeights
+  for (const ex in state.currentWeights) {
+    let val = state.currentWeights[ex];
+    if (targetUnit === 'kg') {
+      // lb to kg: round to nearest 2.5 kg
+      state.currentWeights[ex] = Math.round((val * 0.45359237) / 2.5) * 2.5;
+    } else {
+      // kg to lb: round to nearest 5 lb
+      state.currentWeights[ex] = Math.round((val / 0.45359237) / 5) * 5;
+    }
   }
-  return `${lbVal} lb`;
+
+  // Convert history workouts
+  state.workoutHistory.forEach(workout => {
+    workout.exercises.forEach(ex => {
+      let val = ex.weight;
+      if (targetUnit === 'kg') {
+        ex.weight = Math.round((val * 0.45359237) / 2.5) * 2.5;
+      } else {
+        ex.weight = Math.round((val / 0.45359237) / 5) * 5;
+      }
+    });
+  });
+
+  saveStateToStorage();
 }
 
 // --- UI Helpers ---
@@ -173,6 +198,7 @@ function startRestTimer(seconds) {
   }, 1000);
 }
 
+// Rest timer functions
 function stopRestTimer() {
   if (state.restTimer.intervalId) {
     clearInterval(state.restTimer.intervalId);
@@ -220,7 +246,7 @@ function initWorkout(workoutName) {
         sets: Array(setsCount).fill(null),
         isWarmupMode: false,
         showPlateCalculator: false,
-        warmupSets: [] // Generated when entering warmup mode
+        warmupSets: []
       };
     })
   };
@@ -251,7 +277,6 @@ function getPlatesForWeight(weight) {
     while (sideWeight >= plate) {
       platesNeeded.push(plate);
       sideWeight -= plate;
-      // Precision margin correction
       if (sideWeight < 0.1) sideWeight = 0;
     }
   }
@@ -270,25 +295,21 @@ function generateWarmups(exercise) {
   }
 
   const steps = [];
-  // 2 sets with empty bar
   steps.push({ weight: barWeight, reps: 5, completed: false });
   steps.push({ weight: barWeight, reps: 5, completed: false });
 
-  // 50% working weight
   let w50 = targetWeight * 0.5;
   w50 = isLb ? Math.round(w50 / 5) * 5 : Math.round(w50 / 2.5) * 2.5;
   if (w50 > barWeight) {
     steps.push({ weight: Math.min(w50, targetWeight - 10), reps: 5, completed: false });
   }
 
-  // 70% working weight
   let w70 = targetWeight * 0.7;
   w70 = isLb ? Math.round(w70 / 5) * 5 : Math.round(w70 / 2.5) * 2.5;
   if (w70 > w50) {
     steps.push({ weight: Math.min(w70, targetWeight - 5), reps: 3, completed: false });
   }
 
-  // 90% working weight
   let w90 = targetWeight * 0.9;
   w90 = isLb ? Math.round(w90 / 5) * 5 : Math.round(w90 / 2.5) * 2.5;
   if (w90 > w70) {
@@ -306,7 +327,6 @@ function renderActiveExercises() {
     const card = document.createElement('div');
     card.className = 'exercise-card';
 
-    // Header top row (Name, Warmup selector)
     const headerTop = document.createElement('div');
     headerTop.className = 'exercise-header-top';
     headerTop.innerHTML = `
@@ -322,37 +342,31 @@ function renderActiveExercises() {
     `;
     card.appendChild(headerTop);
 
-    // Weight and settings controls
     const controlsRow = document.createElement('div');
     controlsRow.className = 'exercise-header-top';
     
-    // Weight value clicking toggles plate calculator
-    const displayWeight = state.settings.unit === 'kg' ? Math.round(exercise.weight * 0.45359237) : exercise.weight;
-    
     controlsRow.innerHTML = `
       <div class="weight-controller">
-        <button class="weight-btn" onclick="adjustWeight(${exIndex}, -5)">-5</button>
+        <button class="weight-btn" onclick="adjustWeight(${exIndex}, -5)">-</button>
         <span class="weight-value" onclick="togglePlateCalculator(${exIndex})" title="Click to view Plate Calculator">
           ${formatWeight(exercise.weight)}
         </span>
-        <button class="weight-btn" onclick="adjustWeight(${exIndex}, 5)">+5</button>
+        <button class="weight-btn" onclick="adjustWeight(${exIndex}, 5)">+</button>
       </div>
       <span style="font-size: 0.75rem; color: var(--text-secondary);">Click weight for plates</span>
     `;
     card.appendChild(controlsRow);
 
-    // Render plate calculator inline if expanded
     if (exercise.showPlateCalculator) {
       const plateCalc = document.createElement('div');
       plateCalc.className = 'plate-calculator-view';
       
-      const plates = getPlatesForWeight(displayWeight);
+      const plates = getPlatesForWeight(exercise.weight);
       let platesHTML = '';
       if (plates.length === 0) {
         platesHTML = `<span style="font-size:0.85rem; color:var(--text-secondary);">Barbell only (${state.settings.unit === 'kg' ? '20kg' : '45lb'})</span>`;
       } else {
         plates.forEach(p => {
-          // Normalize formatting class
           const classStr = String(p).replace('.', '-');
           platesHTML += `<div class="plate-badge p${classStr}">${p}</div>`;
         });
@@ -368,7 +382,6 @@ function renderActiveExercises() {
       card.appendChild(plateCalc);
     }
 
-    // Render set circle grid
     const setsRow = document.createElement('div');
     setsRow.className = 'sets-row';
 
@@ -381,14 +394,12 @@ function renderActiveExercises() {
         const circle = document.createElement('div');
         circle.className = 'set-circle';
         
-        const wDisplayWeight = state.settings.unit === 'kg' ? Math.round(wset.weight * 0.45359237) : wset.weight;
-        const formattedW = state.settings.unit === 'kg' ? `${wDisplayWeight}k` : `${wDisplayWeight}`;
+        const formattedW = state.settings.unit === 'kg' ? `${wset.weight}k` : `${wset.weight}`;
 
         if (wset.completed) {
           circle.classList.add('completed');
           circle.textContent = wset.reps;
         } else {
-          // Show weight & reps inside circle
           circle.style.fontSize = '0.75rem';
           circle.style.flexDirection = 'column';
           circle.innerHTML = `<span>${formattedW}</span><span style="font-size:0.6rem; opacity:0.7;">x${wset.reps}</span>`;
@@ -398,14 +409,12 @@ function renderActiveExercises() {
           wset.completed = !wset.completed;
           renderActiveExercises();
           if (wset.completed) {
-            // shorter timer for warmup sets (60 seconds)
             startRestTimer(60);
           }
         });
         setsRow.appendChild(circle);
       });
     } else {
-      // Working sets 5x5
       exercise.sets.forEach((repCount, setIndex) => {
         const circle = document.createElement('div');
         circle.className = 'set-circle';
@@ -427,10 +436,14 @@ function renderActiveExercises() {
   });
 }
 
-window.adjustWeight = function(exIndex, delta) {
+window.adjustWeight = function(exIndex, baseDelta) {
   if (!state.activeWorkout) return;
-  state.activeWorkout.exercises[exIndex].weight = Math.max(0, state.activeWorkout.exercises[exIndex].weight + delta);
-  // regenerate warmups if changed
+  // If unit is kg, adjust by 2.5 kg increments, otherwise 5 lbs
+  let actualDelta = baseDelta;
+  if (state.settings.unit === 'kg') {
+    actualDelta = baseDelta > 0 ? 2.5 : -2.5;
+  }
+  state.activeWorkout.exercises[exIndex].weight = Math.max(0, state.activeWorkout.exercises[exIndex].weight + actualDelta);
   if (state.activeWorkout.exercises[exIndex].isWarmupMode) {
     state.activeWorkout.exercises[exIndex].warmupSets = generateWarmups(state.activeWorkout.exercises[exIndex]);
   }
@@ -488,7 +501,12 @@ function finishWorkout() {
       const allSetsSuccessful = ex.sets.every(r => r === 5);
       
       if (allSetsSuccessful) {
-        const increment = ex.name === 'Deadlift' ? 10 : 5;
+        let increment = 5;
+        if (state.settings.unit === 'kg') {
+          increment = ex.name === 'Deadlift' ? 5 : 2.5;
+        } else {
+          increment = ex.name === 'Deadlift' ? 10 : 5;
+        }
         state.currentWeights[ex.name] = (state.currentWeights[ex.name] || DEFAULT_WEIGHTS[ex.name]) + increment;
       }
 
@@ -769,12 +787,7 @@ function renderProgressChart() {
     if (!matchedEx) return;
 
     let value = 0;
-    let rawWeight = matchedEx.weight;
-
-    let displayedWeight = rawWeight;
-    if (state.settings.unit === 'kg') {
-      displayedWeight = Math.round(rawWeight * 0.45359237);
-    }
+    let displayedWeight = matchedEx.weight;
 
     if (metric === 'weight') {
       value = displayedWeight;
@@ -1018,6 +1031,19 @@ function executeImport() {
     if (exerciseFound.size >= 5) break;
   }
 
+  // If active user imported history, make sure unit conversions align with setting
+  if (state.settings.unit === 'kg') {
+    // CSV history imported weights default to LBS, convert them to KGs if they chose KGs
+    state.workoutHistory.forEach(workout => {
+      workout.exercises.forEach(ex => {
+        ex.weight = Math.round((ex.weight * 0.45359237) / 2.5) * 2.5;
+      });
+    });
+    for (const ex in state.currentWeights) {
+      state.currentWeights[ex] = Math.round((state.currentWeights[ex] * 0.45359237) / 2.5) * 2.5;
+    }
+  }
+
   saveStateToStorage();
   
   alert(`Import complete! Loaded ${importedCount} workouts. Skipped ${skippedCount} duplicate dates.`);
@@ -1036,7 +1062,6 @@ function executeImport() {
 document.addEventListener('DOMContentLoaded', () => {
   loadStateFromStorage();
   
-  // Register Offline Service Worker (PWA feature)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then(() => console.log('PWA Service Worker Registered Successfully.'))
@@ -1141,19 +1166,21 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('unit-lb-btn').addEventListener('click', () => {
+    if (state.settings.unit === 'lb') return;
     state.settings.unit = 'lb';
     document.getElementById('unit-lb-btn').classList.add('active');
     document.getElementById('unit-kg-btn').classList.remove('active');
-    saveStateToStorage();
+    convertStateWeights('lb');
     renderHistory();
     renderCalendar();
   });
 
   document.getElementById('unit-kg-btn').addEventListener('click', () => {
+    if (state.settings.unit === 'kg') return;
     state.settings.unit = 'kg';
     document.getElementById('unit-kg-btn').classList.add('active');
     document.getElementById('unit-lb-btn').classList.remove('active');
-    saveStateToStorage();
+    convertStateWeights('kg');
     renderHistory();
     renderCalendar();
   });
