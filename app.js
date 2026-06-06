@@ -14,9 +14,9 @@ const EXERCISES_WORKOUT_B = ['Squat', 'Overhead Press', 'Deadlift'];
 const PLATES_LBS = [45, 35, 25, 10, 5, 2.5];
 const PLATES_KGS = [25, 20, 15, 10, 5, 2.5, 1.25];
 
-// --- Supabase Placeholder Credentials (Injected by Vercel Build Command) ---
-const SUPABASE_URL = '__SUPABASE_URL__';
-const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+// --- Supabase Credentials ---
+const SUPABASE_URL = 'https://refpjxitosabqrdrtqjt.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_3fXKJI7m5X02cm_ifexcZQ_m3skroXF';
 
 // --- State Management ---
 let state = {
@@ -99,6 +99,7 @@ function loadStateFromStorage() {
   applyTheme();
 }
 
+// Save state to storage
 function saveStateToStorage() {
   localStorage.setItem('al_history', JSON.stringify(state.workoutHistory));
   localStorage.setItem('al_weights', JSON.stringify(state.currentWeights));
@@ -1082,14 +1083,6 @@ async function executeImport() {
 
 // --- Supabase Cloud Sync Engine ---
 function initSupabase() {
-  // Check if placeholders were replaced by build settings
-  if (SUPABASE_URL.startsWith('__') || SUPABASE_ANON_KEY.startsWith('__')) {
-    document.getElementById('cloud-sync-status').textContent = 'Status: Local-Only Mode (Config Required)';
-    document.getElementById('btn-cloud-connect').setAttribute('disabled', 'true');
-    document.getElementById('btn-cloud-connect').textContent = 'Setup Vercel Env Vars';
-    return;
-  }
-
   try {
     state.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
