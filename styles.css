@@ -1109,8 +1109,15 @@ input:checked + .slider:before {
     .workout-choices {
       grid-template-columns: 1fr;
     }
+    .profile-badge {
+      padding: 4px;
+      border-radius: 50%;
+    }
+    .profile-name,
+    #header-signout-btn {
+      display: none !important;
+    }
   }
-}
 
 /* Header Controls & Profile Badges */
 .header-controls {
