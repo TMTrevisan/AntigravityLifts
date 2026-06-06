@@ -1092,10 +1092,37 @@ function initSupabase() {
       const connectBtn = document.getElementById('btn-cloud-connect');
       const disconnectBtn = document.getElementById('btn-cloud-disconnect');
 
+      const headerLoginBtn = document.getElementById('header-login-btn');
+      const headerProfileBadge = document.getElementById('header-profile-badge');
+      const headerUserEmail = document.getElementById('header-user-email');
+      const avatarEl = headerProfileBadge.querySelector('.profile-avatar');
+
       if (session) {
-        statusEl.innerHTML = `<span style="color:#10b981; font-weight:bold;">● Connected</span> as ${session.user.email}`;
-        connectBtn.textContent = 'Sync Now (Force Sync)';
-        disconnectBtn.classList.remove('hidden');
+        if (statusEl) {
+          statusEl.innerHTML = `<span style="color:#10b981; font-weight:bold;">● Connected</span> as ${session.user.email}`;
+        }
+        if (connectBtn) {
+          connectBtn.textContent = 'Sync Now (Force Sync)';
+        }
+        if (disconnectBtn) {
+          disconnectBtn.classList.remove('hidden');
+        }
+        
+        // Update header UI
+        if (headerLoginBtn) headerLoginBtn.classList.add('hidden');
+        if (headerProfileBadge) headerProfileBadge.classList.remove('hidden');
+        if (headerUserEmail) {
+          const displayName = session.user.user_metadata.full_name || session.user.user_metadata.name || session.user.email.split('@')[0];
+          headerUserEmail.textContent = displayName;
+        }
+        if (avatarEl) {
+          const avatarUrl = session.user.user_metadata.avatar_url || session.user.user_metadata.picture;
+          if (avatarUrl) {
+            avatarEl.innerHTML = `<img src="${avatarUrl}" alt="Avatar" referrerpolicy="no-referrer" style="width:24px; height:24px; border-radius:50%; object-fit:cover; display:block;">`;
+          } else {
+            avatarEl.textContent = '👤';
+          }
+        }
         
         if (window.location.hash.includes('access_token')) {
           history.replaceState(null, document.title, window.location.pathname + window.location.search);
@@ -1103,14 +1130,28 @@ function initSupabase() {
 
         syncAllWorkoutsWithCloud();
       } else {
-        statusEl.textContent = 'Status: Disconnected';
-        connectBtn.textContent = 'Connect & Sign in with Google';
-        disconnectBtn.classList.add('hidden');
+        if (statusEl) {
+          statusEl.textContent = 'Status: Disconnected';
+        }
+        if (connectBtn) {
+          connectBtn.textContent = 'Connect & Sign in with Google';
+        }
+        if (disconnectBtn) {
+          disconnectBtn.classList.add('hidden');
+        }
+        
+        // Update header UI
+        if (headerLoginBtn) headerLoginBtn.classList.remove('hidden');
+        if (headerProfileBadge) headerProfileBadge.classList.add('hidden');
+        if (avatarEl) avatarEl.textContent = '👤';
       }
     });
   } catch (err) {
     console.error('Failed to initialize Supabase client:', err);
-    document.getElementById('cloud-sync-status').textContent = 'Status: Connection Configuration Error';
+    const statusEl = document.getElementById('cloud-sync-status');
+    if (statusEl) {
+      statusEl.textContent = 'Status: Connection Configuration Error';
+    }
   }
 }
 
@@ -1345,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Supabase Cloud Sync Actions
-  document.getElementById('btn-cloud-connect').addEventListener('click', async () => {
+  const handleAuthRedirect = async () => {
     if (state.supabaseClient) {
       if (state.currentUserSession) {
         syncAllWorkoutsWithCloud();
@@ -1361,6 +1402,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     }
+  };
+
+  document.getElementById('btn-cloud-connect').addEventListener('click', handleAuthRedirect);
+  document.getElementById('header-login-btn').addEventListener('click', handleAuthRedirect);
+
+  document.getElementById('header-profile-badge').addEventListener('click', () => {
+    showView('tab-settings');
   });
 
   document.getElementById('btn-cloud-disconnect').addEventListener('click', async () => {
@@ -1370,9 +1418,13 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentUserSession = null;
     saveStateToStorage();
 
-    document.getElementById('cloud-sync-status').textContent = 'Status: Disconnected';
-    document.getElementById('btn-cloud-disconnect').classList.add('hidden');
-    document.getElementById('btn-cloud-connect').textContent = 'Connect & Sign in with Google';
+    const statusEl = document.getElementById('cloud-sync-status');
+    const connectBtn = document.getElementById('btn-cloud-connect');
+    const disconnectBtn = document.getElementById('btn-cloud-disconnect');
+
+    if (statusEl) statusEl.textContent = 'Status: Disconnected';
+    if (disconnectBtn) disconnectBtn.classList.add('hidden');
+    if (connectBtn) connectBtn.textContent = 'Connect & Sign in with Google';
     alert("Disconnected from cloud storage. Running local-only mode.");
   });
 
