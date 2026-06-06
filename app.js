@@ -1411,7 +1411,8 @@ document.addEventListener('DOMContentLoaded', () => {
     showView('tab-settings');
   });
 
-  document.getElementById('btn-cloud-disconnect').addEventListener('click', async () => {
+  const handleSignOut = async (e) => {
+    if (e) e.stopPropagation();
     if (state.supabaseClient) {
       await state.supabaseClient.auth.signOut();
     }
@@ -1426,7 +1427,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (disconnectBtn) disconnectBtn.classList.add('hidden');
     if (connectBtn) connectBtn.textContent = 'Connect & Sign in with Google';
     alert("Disconnected from cloud storage. Running local-only mode.");
-  });
+  };
+
+  document.getElementById('btn-cloud-disconnect').addEventListener('click', handleSignOut);
+  document.getElementById('header-signout-btn').addEventListener('click', handleSignOut);
 
   // CSV Drag and drop zone bindings
   const dropZone = document.getElementById('csv-drop-zone');

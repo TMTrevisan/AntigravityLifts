@@ -1186,3 +1186,20 @@ input:checked + .slider:before {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.btn-signout {
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background-color var(--transition-speed);
+}
+
+.btn-signout:hover {
+  background-color: rgba(255, 82, 82, 0.15);
+}
