@@ -1062,9 +1062,27 @@ async function executeImport() {
   saveStateToStorage();
 
   if (state.supabaseClient && state.currentUserSession) {
-    for (const workout of parsedWorkoutsToImport) {
+    const workoutsToUpload = [];
+    parsedWorkoutsToImport.forEach(workout => {
       if (!existingDates.has(workout.date)) {
-        await syncWorkoutToCloud(workout);
+        workoutsToUpload.push({
+          user_id: state.currentUserSession.user.id,
+          date: workout.date,
+          workout_name: workout.workoutName,
+          duration: parseFloat(workout.duration || 1.0),
+          exercises: workout.exercises
+        });
+      }
+    });
+
+    if (workoutsToUpload.length > 0) {
+      try {
+        const { error: uploadErr } = await state.supabaseClient
+          .from('workouts')
+          .insert(workoutsToUpload);
+        if (uploadErr) throw uploadErr;
+      } catch (err) {
+        console.error('Failed to batch upload imported workouts to cloud:', err);
       }
     }
   }
@@ -1221,12 +1239,26 @@ async function syncAllWorkoutsWithCloud() {
       }
     });
 
+    const workoutsToUpload = [];
     for (const lw of state.workoutHistory) {
       const key = `${lw.date}_${lw.workoutName}`;
       if (!cloudDates.has(key)) {
-        await syncWorkoutToCloud(lw);
-        mergedCount++;
+        workoutsToUpload.push({
+          user_id: state.currentUserSession.user.id,
+          date: lw.date,
+          workout_name: lw.workoutName,
+          duration: parseFloat(lw.duration || 1.0),
+          exercises: lw.exercises
+        });
       }
+    }
+
+    if (workoutsToUpload.length > 0) {
+      const { error: uploadError } = await state.supabaseClient
+        .from('workouts')
+        .insert(workoutsToUpload);
+      if (uploadError) throw uploadError;
+      mergedCount += workoutsToUpload.length;
     }
 
     if (mergedCount > 0) {
