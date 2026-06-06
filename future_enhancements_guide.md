@@ -11,7 +11,7 @@ To allow users to access their workouts from any device and keep data isolated (
 ### Step 1: Supabase Setup
 1. Create a free account at [Supabase](https://supabase.com).
 2. Create a project named `AntigravityLifts`.
-3. In the SQL Editor, create the following two tables:
+3. In the SQL Editor, paste and run the following query to create the tables, enable **Row Level Security (RLS)**, and define access control policies:
 
 ```sql
 -- Profiles table to store user settings
@@ -34,6 +34,33 @@ create table workouts (
   duration numeric not null,
   exercises jsonb not null
 );
+
+-- 1. Enable Row Level Security (RLS)
+alter table profiles enable row level security;
+alter table workouts enable row level security;
+
+-- 2. Create Profiles Access Policies
+create policy "Users can view their own profile" on profiles
+  for select using (auth.uid() = id);
+
+create policy "Users can update their own profile" on profiles
+  for update using (auth.uid() = id);
+
+create policy "Users can insert their own profile" on profiles
+  for insert with check (auth.uid() = id);
+
+-- 3. Create Workouts Access Policies
+create policy "Users can view their own workouts" on workouts
+  for select using (auth.uid() = user_id);
+
+create policy "Users can insert their own workouts" on workouts
+  for insert with check (auth.uid() = user_id);
+
+create policy "Users can update their own workouts" on workouts
+  for update using (auth.uid() = user_id);
+
+create policy "Users can delete their own workouts" on workouts
+  for delete using (auth.uid() = user_id);
 ```
 
 ### Step 2: Google OAuth Configuration
