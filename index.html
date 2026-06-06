@@ -12,6 +12,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Stylesheet -->
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -191,6 +193,29 @@
 
       <!-- Settings Tab -->
       <section id="tab-settings" class="tab-content hidden">
+        <!-- Supabase Cloud Sync -->
+        <div class="glass-card">
+          <h2>Supabase Cloud Sync</h2>
+          <p class="subtitle">Back up and sync workouts between devices via Google Login.</p>
+          <div class="settings-list">
+            <div class="control-row">
+              <label for="setting-supabase-url">Supabase Project URL</label>
+              <input type="text" id="setting-supabase-url" class="form-select" style="text-align:left;" placeholder="https://your-project.supabase.co" value="https://refpjxitosabqrdrtqjt.supabase.co">
+            </div>
+            <div class="control-row" style="margin-top:10px;">
+              <label for="setting-supabase-key">Supabase Anon Key</label>
+              <input type="password" id="setting-supabase-key" class="form-select" style="text-align:left;" placeholder="Paste anon public API key">
+            </div>
+            <div class="settings-item" style="margin-top:15px; border-bottom:none; display:flex; flex-direction:column; align-items:stretch; gap:10px;">
+              <div id="cloud-sync-status" style="font-size:0.85rem; color:var(--text-secondary); text-align:center;">
+                Status: Not Connected
+              </div>
+              <button class="btn btn-primary" id="btn-cloud-connect">Connect & Sign in with Google</button>
+              <button class="btn btn-outline hidden" id="btn-cloud-disconnect">Disconnect Cloud Sync</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Application Settings -->
         <div class="glass-card">
           <h2>Application Settings</h2>
@@ -291,7 +316,7 @@
         <!-- Footer / Version -->
         <div class="settings-footer">
           <p>AntigravityLifts 5x5 Tracker</p>
-          <p class="version">Version 1.2.0</p>
+          <p class="version">Version 1.3.0</p>
         </div>
       </section>
 
