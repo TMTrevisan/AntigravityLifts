@@ -14,9 +14,9 @@ const EXERCISES_WORKOUT_B = ['Squat', 'Overhead Press', 'Deadlift'];
 const PLATES_LBS = [45, 35, 25, 10, 5, 2.5];
 const PLATES_KGS = [25, 20, 15, 10, 5, 2.5, 1.25];
 
-// --- Supabase Hardcoded Credentials ---
-const SUPABASE_URL = 'https://refpjxitosabqrdrtqjt.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_3fXKJI7m5X02cm_ifexcZQ_m3skroXF';
+// --- Supabase Placeholder Credentials (Injected by Vercel Build Command) ---
+const SUPABASE_URL = '__SUPABASE_URL__';
+const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
 
 // --- State Management ---
 let state = {
@@ -1082,6 +1082,14 @@ async function executeImport() {
 
 // --- Supabase Cloud Sync Engine ---
 function initSupabase() {
+  // Check if placeholders were replaced by build settings
+  if (SUPABASE_URL.startsWith('__') || SUPABASE_ANON_KEY.startsWith('__')) {
+    document.getElementById('cloud-sync-status').textContent = 'Status: Local-Only Mode (Config Required)';
+    document.getElementById('btn-cloud-connect').setAttribute('disabled', 'true');
+    document.getElementById('btn-cloud-connect').textContent = 'Setup Vercel Env Vars';
+    return;
+  }
+
   try {
     state.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
@@ -1102,7 +1110,7 @@ function initSupabase() {
 
         syncAllWorkoutsWithCloud();
       } else {
-        statusEl.textContent = 'Status: Local-Only Mode';
+        statusEl.textContent = 'Status: Disconnected';
         connectBtn.textContent = 'Connect & Sign in with Google';
         disconnectBtn.classList.add('hidden');
       }
@@ -1347,10 +1355,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-cloud-connect').addEventListener('click', async () => {
     if (state.supabaseClient) {
       if (state.currentUserSession) {
-        // Connected: Force sync
         syncAllWorkoutsWithCloud();
       } else {
-        // Not Logged in: Trigger login redirect
         const { data, error } = await state.supabaseClient.auth.signInWithOAuth({
           provider: 'google',
           options: {
@@ -1371,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentUserSession = null;
     saveStateToStorage();
 
-    document.getElementById('cloud-sync-status').textContent = 'Status: Local-Only Mode';
+    document.getElementById('cloud-sync-status').textContent = 'Status: Disconnected';
     document.getElementById('btn-cloud-disconnect').classList.add('hidden');
     document.getElementById('btn-cloud-connect').textContent = 'Connect & Sign in with Google';
     alert("Disconnected from cloud storage. Running local-only mode.");
