@@ -14,6 +14,10 @@ const EXERCISES_WORKOUT_B = ['Squat', 'Overhead Press', 'Deadlift'];
 const PLATES_LBS = [45, 35, 25, 10, 5, 2.5];
 const PLATES_KGS = [25, 20, 15, 10, 5, 2.5, 1.25];
 
+// --- Supabase Hardcoded Credentials ---
+const SUPABASE_URL = 'https://refpjxitosabqrdrtqjt.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_3fXKJI7m5X02cm_ifexcZQ_m3skroXF';
+
 // --- State Management ---
 let state = {
   workoutHistory: [], // [workoutObjects]
@@ -30,9 +34,7 @@ let state = {
     timerEnabled: true,
     timerDuration: 180,
     unit: 'lb',
-    reminders: false,
-    supabaseUrl: '',
-    supabaseKey: ''
+    reminders: false
   },
   calendarDate: new Date(),
   chartInstance: null,
@@ -521,7 +523,6 @@ async function finishWorkout() {
 
   saveStateToStorage();
   
-  // Sync to Supabase in background
   if (state.supabaseClient && state.currentUserSession) {
     await syncWorkoutToCloud(workoutObj);
   }
@@ -573,7 +574,6 @@ window.deleteHistoryWorkout = async function(index) {
     state.workoutHistory.splice(index, 1);
     saveStateToStorage();
     
-    // Delete from Supabase in background
     if (state.supabaseClient && state.currentUserSession) {
       await state.supabaseClient
         .from('workouts')
@@ -1060,7 +1060,6 @@ async function executeImport() {
 
   saveStateToStorage();
 
-  // Sync imported workouts to Supabase in the background
   if (state.supabaseClient && state.currentUserSession) {
     for (const workout of parsedWorkoutsToImport) {
       if (!existingDates.has(workout.date)) {
@@ -1083,20 +1082,9 @@ async function executeImport() {
 
 // --- Supabase Cloud Sync Engine ---
 function initSupabase() {
-  const url = state.settings.supabaseUrl;
-  const key = state.settings.supabaseKey;
-
-  if (!url || !key) {
-    document.getElementById('cloud-sync-status').textContent = 'Status: Local-Only Mode';
-    document.getElementById('btn-cloud-disconnect').classList.add('hidden');
-    document.getElementById('btn-cloud-connect').textContent = 'Connect & Sign in with Google';
-    return;
-  }
-
   try {
-    state.supabaseClient = window.supabase.createClient(url, key);
+    state.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    // Set up auth state change listener
     state.supabaseClient.auth.onAuthStateChange((event, session) => {
       state.currentUserSession = session;
       const statusEl = document.getElementById('cloud-sync-status');
@@ -1108,15 +1096,13 @@ function initSupabase() {
         connectBtn.textContent = 'Sync Now (Force Sync)';
         disconnectBtn.classList.remove('hidden');
         
-        // Remove Supabase parameters from Hash URL to clean up interface
         if (window.location.hash.includes('access_token')) {
           history.replaceState(null, document.title, window.location.pathname + window.location.search);
         }
 
-        // Run progressive database sync
         syncAllWorkoutsWithCloud();
       } else {
-        statusEl.textContent = 'Status: Connected to Database (Logged Out)';
+        statusEl.textContent = 'Status: Local-Only Mode';
         connectBtn.textContent = 'Connect & Sign in with Google';
         disconnectBtn.classList.add('hidden');
       }
@@ -1139,7 +1125,6 @@ async function syncWorkoutToCloud(workout) {
   };
 
   try {
-    // Delete any existing workout for the user on this date to prevent duplicate records
     await state.supabaseClient
       .from('workouts')
       .delete()
@@ -1147,7 +1132,6 @@ async function syncWorkoutToCloud(workout) {
       .eq('date', workout.date)
       .eq('workout_name', workout.workoutName);
 
-    // Insert new record
     await state.supabaseClient
       .from('workouts')
       .insert(workoutPayload);
@@ -1162,7 +1146,6 @@ async function syncAllWorkoutsWithCloud() {
   statusEl.innerHTML = `<span style="color:var(--info-color);">Syncing history...</span>`;
 
   try {
-    // 1. Fetch Cloud Workouts
     const { data: cloudWorkouts, error } = await state.supabaseClient
       .from('workouts')
       .select('*')
@@ -1171,7 +1154,6 @@ async function syncAllWorkoutsWithCloud() {
 
     if (error) throw error;
 
-    // Create lookup keys
     const cloudDates = new Map();
     cloudWorkouts.forEach(cw => {
       cloudDates.set(`${cw.date}_${cw.workout_name}`, cw);
@@ -1184,7 +1166,6 @@ async function syncAllWorkoutsWithCloud() {
 
     let mergedCount = 0;
 
-    // 2. Add missing workouts from cloud to local
     cloudWorkouts.forEach(cw => {
       const key = `${cw.date}_${cw.workout_name}`;
       if (!localDates.has(key)) {
@@ -1198,7 +1179,6 @@ async function syncAllWorkoutsWithCloud() {
       }
     });
 
-    // 3. Upload missing workouts from local to cloud
     for (const lw of state.workoutHistory) {
       const key = `${lw.date}_${lw.workoutName}`;
       if (!cloudDates.has(key)) {
@@ -1208,14 +1188,12 @@ async function syncAllWorkoutsWithCloud() {
     }
 
     if (mergedCount > 0) {
-      // Re-sort local history and update views
       state.workoutHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
       saveStateToStorage();
       renderHistory();
       renderCalendar();
     }
 
-    // Auto-update base weights to last session
     if (state.workoutHistory.length > 0) {
       const lastSession = state.workoutHistory[0];
       lastSession.exercises.forEach(ex => {
@@ -1240,10 +1218,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(() => console.log('PWA Service Worker Registered Successfully.'))
       .catch(err => console.log('Service Worker registration failed: ', err));
   }
-
-  // Populate Supabase inputs
-  document.getElementById('setting-supabase-url').value = state.settings.supabaseUrl || 'https://refpjxitosabqrdrtqjt.supabase.co';
-  document.getElementById('setting-supabase-key').value = state.settings.supabaseKey || '';
 
   // Initialize Supabase Client
   initSupabase();
@@ -1371,30 +1345,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Supabase Cloud Sync Actions
   document.getElementById('btn-cloud-connect').addEventListener('click', async () => {
-    const url = document.getElementById('setting-supabase-url').value.trim();
-    const key = document.getElementById('setting-supabase-key').value.trim();
-
-    if (!url || !key) {
-      alert("Please enter both your Supabase URL and Anon Key!");
-      return;
-    }
-
-    state.settings.supabaseUrl = url;
-    state.settings.supabaseKey = key;
-    saveStateToStorage();
-
-    initSupabase();
-
     if (state.supabaseClient) {
-      // Trigger Google OAuth Flow redirect
-      const { data, error } = await state.supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + window.location.pathname
+      if (state.currentUserSession) {
+        // Connected: Force sync
+        syncAllWorkoutsWithCloud();
+      } else {
+        // Not Logged in: Trigger login redirect
+        const { data, error } = await state.supabaseClient.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin + window.location.pathname
+          }
+        });
+        if (error) {
+          alert("Google Authentication failed: " + error.message);
         }
-      });
-      if (error) {
-        alert("Google Authentication failed: " + error.message);
       }
     }
   });
@@ -1403,13 +1368,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.supabaseClient) {
       await state.supabaseClient.auth.signOut();
     }
-    state.settings.supabaseUrl = '';
-    state.settings.supabaseKey = '';
-    state.supabaseClient = null;
     state.currentUserSession = null;
     saveStateToStorage();
 
-    document.getElementById('setting-supabase-key').value = '';
     document.getElementById('cloud-sync-status').textContent = 'Status: Local-Only Mode';
     document.getElementById('btn-cloud-disconnect').classList.add('hidden');
     document.getElementById('btn-cloud-connect').textContent = 'Connect & Sign in with Google';
