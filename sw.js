@@ -1,10 +1,11 @@
-const CACHE_NAME = 'antigravitylifts-v1.2.0';
+const CACHE_NAME = 'antigravitylifts-v1.3.0';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './manifest.json',
+  './icon.png',
   'https://cdn.jsdelivr.net/npm/chart.js',
   'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap'
 ];
