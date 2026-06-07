@@ -88,6 +88,65 @@ function applyGradientTheme(themeId) {
   });
 }
 
+function normalizeDate(rawDate) {
+  if (!rawDate) return '';
+  if (rawDate instanceof Date) {
+    const y = rawDate.getFullYear();
+    const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+    const d = String(rawDate.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  let str = String(rawDate).trim();
+  // Strip any time component (space or 'T')
+  if (str.includes('T')) {
+    str = str.split('T')[0];
+  } else if (str.includes(' ')) {
+    str = str.split(' ')[0];
+  }
+  // Replace slashes with dashes
+  str = str.replace(/\//g, '-');
+  const parts = str.split('-');
+  if (parts.length === 3) {
+    // Check if it starts with year: YYYY-MM-DD
+    if (parts[0].length === 4) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+    // Check if it ends with year: MM-DD-YYYY or DD-MM-YYYY
+    if (parts[2].length === 4) {
+      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+    }
+  }
+  // Fallback to JS Date parsing
+  try {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch (e) {}
+  return str;
+}
+
+function deduplicateWorkoutHistory() {
+  const seenKeys = new Set();
+  const uniqueHistory = [];
+  const sorted = [...(state.workoutHistory || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  sorted.forEach(w => {
+    w.date = normalizeDate(w.date);
+    const key = `${w.date}_${w.workoutName}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      uniqueHistory.push(w);
+    }
+  });
+
+  state.workoutHistory = uniqueHistory;
+  saveStateToStorage();
+}
+
 // --- Web Audio Synthesizer for Timer Gong ---
 let audioCtx = null;
 function playGongSound() {
@@ -149,6 +208,7 @@ function loadStateFromStorage() {
     };
   }
 
+  deduplicateWorkoutHistory();
   applyTheme();
   applyGradientTheme(state.settings.themeGradient || 'green-cyan');
 }
@@ -1237,12 +1297,7 @@ function handleCSVImport(fileText) {
     const row = parseCSVLine(line);
     if (row.length < header.length) continue;
 
-    let rawDate = row[dateIndex];
-    let isoDate = rawDate.replace(/\//g, '-');
-    const dateParts = isoDate.split('-');
-    if (dateParts.length === 3) {
-      isoDate = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
-    }
+    const isoDate = normalizeDate(row[dateIndex]);
 
     const workoutName = row[workoutNameIndex] || 'Workout A';
     const exerciseName = row[exerciseIndex];
@@ -1298,7 +1353,21 @@ function handleCSVImport(fileText) {
 async function executeImport() {
   if (parsedWorkoutsToImport.length === 0) return;
 
-  const existingDates = new Set(state.workoutHistory.map(w => w.date));
+  // Normalize parsed dates
+  parsedWorkoutsToImport.forEach(w => {
+    w.date = normalizeDate(w.date);
+  });
+
+  // If app is currently using kg, convert the parsed workouts (assumed to be in lbs in the StrongLifts CSV) to kg
+  if (state.settings.unit === 'kg') {
+    parsedWorkoutsToImport.forEach(workout => {
+      workout.exercises.forEach(ex => {
+        ex.weight = Math.round((ex.weight * 0.45359237) / 2.5) * 2.5;
+      });
+    });
+  }
+
+  const existingDates = new Set(state.workoutHistory.map(w => normalizeDate(w.date)));
   let importedCount = 0;
   let skippedCount = 0;
 
@@ -1310,6 +1379,8 @@ async function executeImport() {
       skippedCount++;
     }
   });
+
+  deduplicateWorkoutHistory();
 
   state.workoutHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -1324,17 +1395,6 @@ async function executeImport() {
       }
     });
     if (exerciseFound.size >= 5) break;
-  }
-
-  if (state.settings.unit === 'kg') {
-    state.workoutHistory.forEach(workout => {
-      workout.exercises.forEach(ex => {
-        ex.weight = Math.round((ex.weight * 0.45359237) / 2.5) * 2.5;
-      });
-    });
-    for (const ex in state.currentWeights) {
-      state.currentWeights[ex] = Math.round((state.currentWeights[ex] * 0.45359237) / 2.5) * 2.5;
-    }
   }
 
   saveStateToStorage();
@@ -1492,20 +1552,43 @@ async function syncAllWorkoutsWithCloud() {
 
     if (error) throw error;
 
+    // Deduplicate cloud workouts
     const cloudDates = new Map();
+    const duplicateIdsToDelete = [];
     cloudWorkouts.forEach(cw => {
-      cloudDates.set(`${cw.date}_${cw.workout_name}`, cw);
+      cw.date = normalizeDate(cw.date);
+      const key = `${cw.date}_${cw.workout_name}`;
+      if (!cloudDates.has(key)) {
+        cloudDates.set(key, cw);
+      } else {
+        duplicateIdsToDelete.push(cw.id);
+      }
     });
+
+    if (duplicateIdsToDelete.length > 0) {
+      console.log(`Deleting ${duplicateIdsToDelete.length} duplicate workouts from cloud...`);
+      const { error: delErr } = await state.supabaseClient
+        .from('workouts')
+        .delete()
+        .in('id', duplicateIdsToDelete);
+      if (delErr) {
+        console.error('Failed to clean up duplicate cloud records:', delErr);
+      }
+    }
+
+    // Deduplicate local workouts first
+    deduplicateWorkoutHistory();
 
     const localDates = new Map();
     state.workoutHistory.forEach(lw => {
+      lw.date = normalizeDate(lw.date);
       localDates.set(`${lw.date}_${lw.workoutName}`, lw);
     });
 
     let mergedCount = 0;
 
-    cloudWorkouts.forEach(cw => {
-      const key = `${cw.date}_${cw.workout_name}`;
+    // Add unique cloud workouts to local history
+    cloudDates.forEach((cw, key) => {
       if (!localDates.has(key)) {
         state.workoutHistory.push({
           date: cw.date,
@@ -1517,8 +1600,9 @@ async function syncAllWorkoutsWithCloud() {
       }
     });
 
+    // Add unique local workouts to cloud
     const workoutsToUpload = [];
-    for (const lw of state.workoutHistory) {
+    state.workoutHistory.forEach(lw => {
       const key = `${lw.date}_${lw.workoutName}`;
       if (!cloudDates.has(key)) {
         workoutsToUpload.push({
@@ -1529,7 +1613,7 @@ async function syncAllWorkoutsWithCloud() {
           exercises: lw.exercises
         });
       }
-    }
+    });
 
     if (workoutsToUpload.length > 0) {
       const { error: uploadError } = await state.supabaseClient
@@ -1539,7 +1623,7 @@ async function syncAllWorkoutsWithCloud() {
       mergedCount += workoutsToUpload.length;
     }
 
-    if (mergedCount > 0) {
+    if (mergedCount > 0 || duplicateIdsToDelete.length > 0) {
       state.workoutHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
       saveStateToStorage();
       renderHistory();
