@@ -13,5 +13,21 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Workout",
+      "short_name": "Workout",
+      "description": "Launch the workout logger instantly",
+      "url": "./index.html?action=start_workout",
+      "icons": [{ "src": "icon.png", "sizes": "512x512" }]
+    },
+    {
+      "name": "View Progress",
+      "short_name": "Progress",
+      "description": "Check your lifting progress chart",
+      "url": "./index.html?action=view_progress",
+      "icons": [{ "src": "icon.png", "sizes": "512x512" }]
+    }
   ]
 }

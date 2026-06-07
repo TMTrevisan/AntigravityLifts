@@ -18,11 +18,25 @@ const PLATES_KGS = [25, 20, 15, 10, 5, 2.5, 1.25];
 const SUPABASE_URL = 'https://refpjxitosabqrdrtqjt.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_3fXKJI7m5X02cm_ifexcZQ_m3skroXF';
 
+// --- Gradients Library ---
+const GRADIENTS = {
+  'green-cyan': { grad: 'linear-gradient(135deg, #00e676, #00b0ff)', primary: '#00e676', shadow: 'rgba(0, 230, 118, 0.25)' },
+  'pink-purple': { grad: 'linear-gradient(135deg, #ec4899, #8b5cf6)', primary: '#ec4899', shadow: 'rgba(236, 72, 153, 0.25)' },
+  'orange-red': { grad: 'linear-gradient(135deg, #f97316, #ef4444)', primary: '#f97316', shadow: 'rgba(249, 115, 22, 0.25)' },
+  'cyberpunk': { grad: 'linear-gradient(135deg, #ff007f, #00f0ff)', primary: '#ff007f', shadow: 'rgba(255, 0, 127, 0.25)' },
+  'sunset': { grad: 'linear-gradient(135deg, #f59e0b, #ec4899)', primary: '#f59e0b', shadow: 'rgba(245, 158, 11, 0.25)' },
+  'crimson': { grad: 'linear-gradient(135deg, #f43f5e, #be123c)', primary: '#f43f5e', shadow: 'rgba(244, 63, 94, 0.25)' },
+  'emerald': { grad: 'linear-gradient(135deg, #10b981, #059669)', primary: '#10b981', shadow: 'rgba(16, 185, 129, 0.25)' },
+  'sapphire': { grad: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', primary: '#3b82f6', shadow: 'rgba(59, 130, 246, 0.25)' },
+  'indigo': { grad: 'linear-gradient(135deg, #6366f1, #a855f7)', primary: '#6366f1', shadow: 'rgba(99, 102, 241, 0.25)' },
+  'lava': { grad: 'linear-gradient(135deg, #ff4e50, #f9d423)', primary: '#ff4e50', shadow: 'rgba(255, 78, 80, 0.25)' }
+};
+
 // --- State Management ---
 let state = {
   workoutHistory: [], // [workoutObjects]
   currentWeights: { ...DEFAULT_WEIGHTS },
-  activeWorkout: null, // { name: 'Workout A', date: string, startTime: number, exercises: [...] }
+  activeWorkout: null, // { name: 'Workout A', date: string, startTime: number, exercises: [...], rpe: number, notes: string }
   restTimer: {
     duration: 180,
     timeLeft: 0,
@@ -31,16 +45,48 @@ let state = {
   },
   settings: {
     theme: 'dark',
+    themeGradient: 'green-cyan',
     timerEnabled: true,
     timerDuration: 180,
     unit: 'lb',
-    reminders: false
+    reminders: false,
+    schedule: {
+      frequency: '3x',
+      days: [1, 3, 5] // Monday, Wednesday, Friday
+    },
+    workoutTemplates: {
+      'Workout A': [
+        { name: 'Squat', sets: 5, reps: 5 },
+        { name: 'Bench Press', sets: 5, reps: 5 },
+        { name: 'Barbell Row', sets: 5, reps: 5 }
+      ],
+      'Workout B': [
+        { name: 'Squat', sets: 5, reps: 5 },
+        { name: 'Overhead Press', sets: 5, reps: 5 },
+        { name: 'Deadlift', sets: 1, reps: 5 }
+      ]
+    }
   },
   calendarDate: new Date(),
   chartInstance: null,
   supabaseClient: null,
   currentUserSession: null
 };
+
+function applyGradientTheme(themeId) {
+  state.settings.themeGradient = themeId;
+  const t = GRADIENTS[themeId] || GRADIENTS['green-cyan'];
+  document.documentElement.style.setProperty('--primary-gradient', t.grad);
+  document.documentElement.style.setProperty('--primary-color', t.primary);
+  
+  document.querySelectorAll('.theme-swatch').forEach(sw => {
+    if (sw.getAttribute('data-theme-id') === themeId) {
+      sw.classList.add('active');
+    } else {
+      sw.classList.remove('active');
+    }
+  });
+}
 
 // --- Web Audio Synthesizer for Timer Gong ---
 let audioCtx = null;
@@ -93,10 +139,18 @@ function loadStateFromStorage() {
 
   const savedSettings = localStorage.getItem('al_settings');
   if (savedSettings) {
-    state.settings = { ...state.settings, ...JSON.parse(savedSettings) };
+    const parsed = JSON.parse(savedSettings);
+    // Deep merge settings
+    state.settings = { 
+      ...state.settings, 
+      ...parsed,
+      schedule: { ...state.settings.schedule, ...(parsed.schedule || {}) },
+      workoutTemplates: { ...state.settings.workoutTemplates, ...(parsed.workoutTemplates || {}) }
+    };
   }
 
   applyTheme();
+  applyGradientTheme(state.settings.themeGradient || 'green-cyan');
 }
 
 // Save state to storage
@@ -231,20 +285,39 @@ function updateTimerDisplay() {
 // --- Active Workout Logic ---
 function initWorkout(workoutName) {
   const dateObj = new Date();
-  const exercisesList = workoutName === 'Workout A' ? EXERCISES_WORKOUT_A : EXERCISES_WORKOUT_B;
+  
+  if (!state.settings.workoutTemplates) {
+    state.settings.workoutTemplates = {
+      'Workout A': [
+        { name: 'Squat', sets: 5, reps: 5 },
+        { name: 'Bench Press', sets: 5, reps: 5 },
+        { name: 'Barbell Row', sets: 5, reps: 5 }
+      ],
+      'Workout B': [
+        { name: 'Squat', sets: 5, reps: 5 },
+        { name: 'Overhead Press', sets: 5, reps: 5 },
+        { name: 'Deadlift', sets: 1, reps: 5 }
+      ]
+    };
+  }
+  
+  const template = state.settings.workoutTemplates[workoutName] || [];
 
   state.activeWorkout = {
     name: workoutName,
     date: dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
     isoDate: dateObj.toISOString().split('T')[0],
     startTime: Date.now(),
-    exercises: exercisesList.map(name => {
-      const isDeadlift = name === 'Deadlift';
-      const setsCount = isDeadlift ? 1 : 5;
+    rpe: 8,
+    notes: "",
+    exercises: template.map(item => {
+      const setsCount = item.sets;
+      const targetReps = item.reps;
       return {
-        name: name,
-        weight: state.currentWeights[name] || DEFAULT_WEIGHTS[name],
+        name: item.name,
+        weight: state.currentWeights[item.name] || DEFAULT_WEIGHTS[item.name] || 45,
         setsCount: setsCount,
+        targetReps: targetReps,
         sets: Array(setsCount).fill(null),
         isWarmupMode: false,
         showPlateCalculator: false,
@@ -252,6 +325,20 @@ function initWorkout(workoutName) {
       };
     })
   };
+
+  // Reset UI active summarizing elements
+  const notesInput = document.getElementById('session-notes-input');
+  if (notesInput) notesInput.value = "";
+  
+  document.querySelectorAll('#session-rpe-container .rpe-btn').forEach(btn => {
+    if (btn.getAttribute('data-rpe') === '8') {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  const hintEl = document.getElementById('rpe-label-hint');
+  if (hintEl) hintEl.textContent = "RPE 8: Hard, 1–2 reps left in reserve";
 
   document.getElementById('active-workout-title').textContent = workoutName;
   document.getElementById('active-workout-date').textContent = state.activeWorkout.date;
@@ -331,10 +418,11 @@ function renderActiveExercises() {
 
     const headerTop = document.createElement('div');
     headerTop.className = 'exercise-header-top';
+    const targetReps = exercise.targetReps || 5;
     headerTop.innerHTML = `
       <div class="exercise-header-left">
         <div class="exercise-title">${exercise.name}</div>
-        <div class="exercise-scheme">${exercise.isWarmupMode ? 'Warmup' : exercise.setsCount + 'x5 working'}</div>
+        <div class="exercise-scheme">${exercise.isWarmupMode ? 'Warmup' : exercise.setsCount + 'x' + targetReps + ' working'}</div>
       </div>
       <div class="exercise-header-right">
         <button class="btn-warmup-toggle ${exercise.isWarmupMode ? 'active' : ''}" onclick="toggleWarmupMode(${exIndex})">
@@ -420,9 +508,9 @@ function renderActiveExercises() {
       exercise.sets.forEach((repCount, setIndex) => {
         const circle = document.createElement('div');
         circle.className = 'set-circle';
-        if (repCount === 5) {
+        if (repCount === targetReps) {
           circle.classList.add('completed');
-        } else if (repCount !== null && repCount < 5) {
+        } else if (repCount !== null && repCount < targetReps) {
           circle.classList.add('failed');
         }
         circle.textContent = repCount === null ? '' : repCount;
@@ -467,21 +555,18 @@ window.togglePlateCalculator = function(exIndex) {
   ex.showPlateCalculator = !ex.showPlateCalculator;
   renderActiveExercises();
 };
-
 function cycleRepCount(exIndex, setIndex) {
   if (!state.activeWorkout) return;
-  const current = state.activeWorkout.exercises[exIndex].sets[setIndex];
+  const ex = state.activeWorkout.exercises[exIndex];
+  const current = ex.sets[setIndex];
+  const targetReps = ex.targetReps || 5;
   let next = null;
 
-  if (current === null) next = 5;
-  else if (current === 5) next = 4;
-  else if (current === 4) next = 3;
-  else if (current === 3) next = 2;
-  else if (current === 2) next = 1;
-  else if (current === 1) next = 0;
-  else next = null;
+  if (current === null) next = targetReps;
+  else if (current === 0) next = null;
+  else next = current - 1;
 
-  state.activeWorkout.exercises[exIndex].sets[setIndex] = next;
+  ex.sets[setIndex] = next;
   renderActiveExercises();
 
   if (next !== null) {
@@ -489,17 +574,23 @@ function cycleRepCount(exIndex, setIndex) {
   }
 }
 
-// --- History Sync & Progression ---
 async function finishWorkout() {
   if (!state.activeWorkout) return;
 
   const durationHours = ((Date.now() - state.activeWorkout.startTime) / 3600000).toFixed(2);
+  const notesVal = document.getElementById('session-notes-input').value.trim();
+  const activeRpeBtn = document.querySelector('#session-rpe-container .rpe-btn.active');
+  const rpeVal = activeRpeBtn ? parseInt(activeRpeBtn.getAttribute('data-rpe'), 10) : 8;
+
   const workoutObj = {
     date: state.activeWorkout.isoDate,
     workoutName: state.activeWorkout.name,
     duration: durationHours,
+    rpe: rpeVal,
+    notes: notesVal,
     exercises: state.activeWorkout.exercises.map(ex => {
-      const allSetsSuccessful = ex.sets.every(r => r === 5);
+      const targetReps = ex.targetReps || 5;
+      const allSetsSuccessful = ex.sets.every(r => r === targetReps);
       
       if (allSetsSuccessful) {
         let increment = 5;
@@ -514,7 +605,8 @@ async function finishWorkout() {
       return {
         name: ex.name,
         weight: ex.weight,
-        sets: [...ex.sets]
+        sets: [...ex.sets],
+        targetReps: targetReps
       };
     })
   };
@@ -530,7 +622,8 @@ async function finishWorkout() {
 
   state.activeWorkout = null;
   stopRestTimer();
-  document.getElementById('rest-timer-widget').classList.add('hidden');
+  const timerWidget = document.getElementById('rest-timer-widget');
+  if (timerWidget) timerWidget.classList.add('hidden');
 
   document.getElementById('workout-setup-panel').classList.remove('hidden');
   document.getElementById('active-workout-panel').classList.add('hidden');
@@ -538,7 +631,57 @@ async function finishWorkout() {
   updateWorkoutSuggestion();
   renderHistory();
   renderCalendar();
+  
+  // Assess if we should offer a deload warning
+  checkDeloadRecommendation();
+
   showView('tab-history');
+}
+
+// Deload Recommendation Engine
+function checkDeloadRecommendation() {
+  const history = state.workoutHistory || [];
+  const exercisesToCheck = ['Squat', 'Bench Press', 'Barbell Row', 'Overhead Press', 'Deadlift'];
+  let recommendedExercise = null;
+
+  for (const exName of exercisesToCheck) {
+    let failsInARow = 0;
+    let occurrences = 0;
+
+    for (const workout of history) {
+      const matchedEx = workout.exercises.find(e => e.name === exName);
+      if (matchedEx) {
+        occurrences++;
+        const targetReps = matchedEx.targetReps || 5;
+        const totalExpected = matchedEx.sets.length * targetReps;
+        const totalCompleted = matchedEx.sets.reduce((sum, r) => sum + (r || 0), 0);
+        
+        if (totalCompleted < totalExpected) {
+          failsInARow++;
+        } else {
+          break; // Streak broken
+        }
+
+        if (occurrences >= 3) break;
+      }
+    }
+
+    if (failsInARow >= 3) {
+      recommendedExercise = exName;
+      break; 
+    }
+  }
+
+  const banner = document.getElementById('deload-alert-banner');
+  if (banner) {
+    if (recommendedExercise) {
+      document.getElementById('deload-recommendation-text').textContent = `You missed targets for ${recommendedExercise} in 3 consecutive sessions. We recommend a 10% deload to rebuild your strength.`;
+      banner.setAttribute('data-recommended-exercise', recommendedExercise);
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+  }
 }
 
 function cancelActiveWorkout() {
@@ -759,11 +902,77 @@ function showCalendarDayDetail(dateStr, workouts) {
 }
 
 // --- Chart.js Rendering Logic ---
+function showChartPointDetails(workout) {
+  const card = document.getElementById('chart-point-details-card');
+  if (!card) return;
+  
+  const dateTitle = document.getElementById('chart-detail-date');
+  const statsContainer = document.getElementById('chart-detail-stats');
+  const exContainer = document.getElementById('chart-detail-exercises');
+  const notesContainer = document.getElementById('chart-detail-notes');
+
+  const formattedDate = new Date(workout.date + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+  
+  dateTitle.textContent = `${workout.workoutName} - ${formattedDate}`;
+
+  let totalVolume = 0;
+  let totalReps = 0;
+  workout.exercises.forEach(ex => {
+    const repsCount = ex.sets.reduce((sum, r) => sum + (r || 0), 0);
+    totalVolume += ex.weight * repsCount;
+    totalReps += repsCount;
+  });
+
+  statsContainer.innerHTML = `
+    <div class="stat-item" style="padding:6px; border-radius:8px;">
+      <div class="stat-label" style="font-size:0.6rem;">Duration</div>
+      <div class="stat-value" style="font-size:0.85rem;">${workout.duration || 1}h</div>
+    </div>
+    <div class="stat-item" style="padding:6px; border-radius:8px;">
+      <div class="stat-label" style="font-size:0.6rem;">Volume</div>
+      <div class="stat-value" style="font-size:0.85rem;">${formatWeight(Math.round(totalVolume))}</div>
+    </div>
+    <div class="stat-item" style="padding:6px; border-radius:8px;">
+      <div class="stat-label" style="font-size:0.6rem;">Reps</div>
+      <div class="stat-value" style="font-size:0.85rem;">${totalReps}</div>
+    </div>
+    <div class="stat-item" style="padding:6px; border-radius:8px;">
+      <div class="stat-label" style="font-size:0.6rem;">RPE</div>
+      <div class="stat-value" style="font-size:0.85rem;">${workout.rpe || 8}</div>
+    </div>
+  `;
+
+  let exHTML = '';
+  workout.exercises.forEach(ex => {
+    const repsStr = ex.sets.map(r => r === null ? '-' : r).join('-');
+    exHTML += `
+      <div style="display:flex; justify-content:space-between; margin-bottom:4px; border-bottom:1px solid rgba(120,120,120,0.05); padding-bottom:3px;">
+        <strong style="color:var(--text-color); font-size:0.85rem;">${ex.name}</strong>
+        <span style="color:var(--text-secondary); font-family:var(--font-mono); font-size:0.85rem;">${formatWeight(ex.weight)} &times; ${repsStr}</span>
+      </div>
+    `;
+  });
+  exContainer.innerHTML = exHTML;
+
+  notesContainer.innerHTML = workout.notes 
+    ? `<strong style="color:var(--text-color); font-size:0.8rem;">Notes:</strong> <span style="font-style:italic; font-size:0.8rem;">"${workout.notes}"</span>`
+    : `<span style="color:var(--text-secondary); font-style:italic; font-size:0.8rem;">No session notes recorded.</span>`;
+
+  card.classList.remove('hidden');
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 function renderProgressChart() {
   const history = state.workoutHistory || [];
   const exercise = document.getElementById('progress-exercise-select').value;
   const timeframe = document.querySelector('#timeframe-filters .filter-pill.active').getAttribute('data-timeframe');
-  const metric = document.querySelector('input[name="metric"]:checked').value;
+  
+  const showWeight = document.getElementById('chart-show-weight').checked;
+  const showe1rm = document.getElementById('chart-show-e1rm').checked;
+  const showVolume = document.getElementById('chart-show-volume').checked;
+  const showReps = document.getElementById('chart-show-reps').checked;
 
   const canvas = document.getElementById('progress-chart');
   if (!canvas) return;
@@ -803,28 +1012,26 @@ function renderProgressChart() {
     const matchedEx = w.exercises.find(ex => ex.name === exercise);
     if (!matchedEx) return;
 
-    let value = 0;
     let displayedWeight = matchedEx.weight;
-
-    if (metric === 'weight') {
-      value = displayedWeight;
-    } else if (metric === 'e1rm') {
-      const maxReps = Math.max(...matchedEx.sets.filter(r => r !== null), 0);
-      if (maxReps > 0) {
-        value = Math.round(displayedWeight * (1 + maxReps / 30));
-      } else {
-        value = displayedWeight;
-      }
-    } else if (metric === 'volume') {
-      const totalReps = matchedEx.sets.reduce((sum, r) => sum + (r || 0), 0);
-      value = displayedWeight * totalReps;
-    } else if (metric === 'reps') {
-      value = matchedEx.sets.reduce((sum, r) => sum + (r || 0), 0);
+    
+    // Calculate e1RM
+    const maxReps = Math.max(...matchedEx.sets.filter(r => r !== null), 0);
+    let e1rmVal = displayedWeight;
+    if (maxReps > 0) {
+      e1rmVal = Math.round(displayedWeight * (1 + maxReps / 30));
     }
+
+    // Calculate Volume & Reps
+    const totalReps = matchedEx.sets.reduce((sum, r) => sum + (r || 0), 0);
+    const volumeVal = displayedWeight * totalReps;
 
     chartPoints.push({
       date: wDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
-      val: value
+      weight: displayedWeight,
+      e1rm: e1rmVal,
+      volume: volumeVal,
+      reps: totalReps,
+      workout: w
     });
   });
 
@@ -839,32 +1046,97 @@ function renderProgressChart() {
     return;
   }
 
-  const primaryAccent = '#00e676';
   const labelColor = state.settings.theme === 'light' ? '#4b5563' : '#9ca3af';
   const gridColor = state.settings.theme === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
+
+  // Build datasets dynamically
+  const datasets = [];
+  const primaryAccent = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#00e676';
+  
+  if (showWeight) {
+    datasets.push({
+      label: 'Weight',
+      data: chartPoints.map(p => p.weight),
+      borderColor: primaryAccent,
+      backgroundColor: 'transparent',
+      yAxisID: 'y-weight',
+      borderWidth: 3,
+      tension: 0.25,
+      pointRadius: 4,
+      pointHoverRadius: 7
+    });
+  }
+
+  if (showe1rm) {
+    datasets.push({
+      label: 'e1RM',
+      data: chartPoints.map(p => p.e1rm),
+      borderColor: '#ffd740', // Yellow
+      backgroundColor: 'transparent',
+      yAxisID: 'y-weight',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      tension: 0.25,
+      pointRadius: 4,
+      pointHoverRadius: 7
+    });
+  }
+
+  if (showVolume) {
+    datasets.push({
+      label: 'Volume',
+      data: chartPoints.map(p => p.volume),
+      borderColor: '#29b6f6', // Light Blue
+      backgroundColor: 'rgba(41, 182, 246, 0.05)',
+      yAxisID: 'y-volume',
+      borderWidth: 2,
+      tension: 0.25,
+      fill: true,
+      pointRadius: 4,
+      pointHoverRadius: 7
+    });
+  }
+
+  if (showReps) {
+    datasets.push({
+      label: 'Reps',
+      data: chartPoints.map(p => p.reps),
+      borderColor: '#ec4899', // Pink
+      backgroundColor: 'transparent',
+      yAxisID: 'y-reps',
+      borderWidth: 2,
+      tension: 0.25,
+      pointRadius: 4,
+      pointHoverRadius: 7
+    });
+  }
 
   state.chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
       labels: chartPoints.map(p => p.date),
-      datasets: [{
-        label: `${exercise} - ${metric.toUpperCase()}`,
-        data: chartPoints.map(p => p.val),
-        borderColor: primaryAccent,
-        backgroundColor: 'rgba(0, 230, 118, 0.08)',
-        fill: true,
-        tension: 0.35,
-        borderWidth: 3,
-        pointBackgroundColor: primaryAccent,
-        pointHoverRadius: 6
-      }]
+      datasets: datasets
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (e, activeEls) => {
+        if (activeEls && activeEls.length > 0) {
+          const index = activeEls[0].index;
+          const pointData = chartPoints[index];
+          if (pointData && pointData.workout) {
+            showChartPointDetails(pointData.workout);
+          }
+        }
+      },
       plugins: {
         legend: {
-          display: false
+          display: true,
+          position: 'top',
+          labels: {
+            color: labelColor,
+            font: { family: 'Outfit', size: 11 }
+          }
         },
         tooltip: {
           backgroundColor: state.settings.theme === 'light' ? '#ffffff' : '#111827',
@@ -876,26 +1148,32 @@ function renderProgressChart() {
       },
       scales: {
         x: {
-          grid: {
-            color: gridColor
-          },
-          ticks: {
-            color: labelColor,
-            font: {
-              family: 'Outfit'
-            }
-          }
+          grid: { color: gridColor },
+          ticks: { color: labelColor, font: { family: 'Outfit' } }
         },
-        y: {
-          grid: {
-            color: gridColor
-          },
-          ticks: {
-            color: labelColor,
-            font: {
-              family: 'Outfit'
-            }
-          }
+        'y-weight': {
+          type: 'linear',
+          display: showWeight || showe1rm,
+          position: 'left',
+          grid: { color: gridColor },
+          ticks: { color: labelColor, font: { family: 'Outfit' } },
+          title: { display: true, text: `Weight / e1RM (${state.settings.unit === 'kg' ? 'KGS' : 'LBS'})`, color: labelColor }
+        },
+        'y-volume': {
+          type: 'linear',
+          display: showVolume,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { color: labelColor, font: { family: 'Outfit' } },
+          title: { display: true, text: `Volume (${state.settings.unit === 'kg' ? 'KGS' : 'LBS'})`, color: labelColor }
+        },
+        'y-reps': {
+          type: 'linear',
+          display: showReps,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { color: labelColor, font: { family: 'Outfit' } },
+          title: { display: true, text: 'Reps Count', color: labelColor }
         }
       }
     }
@@ -1502,10 +1780,270 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.readAsText(file);
   }
 
-  document.getElementById('btn-confirm-import').addEventListener('click', executeImport);
+  // --- Color Gradient Accent Events ---
+  document.querySelectorAll('.theme-swatch').forEach(sw => {
+    sw.addEventListener('click', (e) => {
+      const themeId = e.target.getAttribute('data-theme-id');
+      applyGradientTheme(themeId);
+      saveStateToStorage();
+      renderProgressChart();
+    });
+  });
+
+  // --- Exertion / RPE Click Listeners ---
+  document.querySelectorAll('#session-rpe-container .rpe-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('#session-rpe-container .rpe-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      const rpeVal = parseInt(e.target.getAttribute('data-rpe'), 10);
+      if (state.activeWorkout) {
+        state.activeWorkout.rpe = rpeVal;
+      }
+      
+      const hints = {
+        1: "RPE 1: Extremely light effort, warm up weight",
+        2: "RPE 2: Very light, easy speed work",
+        3: "RPE 3: Light, fast speed work",
+        4: "RPE 4: Moderate speed, warm up threshold",
+        5: "RPE 5: Easy, multiple reps in reserve (>5)",
+        6: "RPE 6: Moderate, 4 reps left in reserve",
+        7: "RPE 7: Moderate-hard, 3 reps left in reserve",
+        8: "RPE 8: Hard, 2 reps left in reserve",
+        9: "RPE 9: Very hard, 1 rep left in reserve",
+        10: "RPE 10: Maximum effort, absolute failure limit"
+      };
+      const hintEl = document.getElementById('rpe-label-hint');
+      if (hintEl) hintEl.textContent = hints[rpeVal] || "";
+    });
+  });
+
+  // --- Manual Deload Control ---
+  const deloadBtn = document.getElementById('btn-trigger-manual-deload');
+  if (deloadBtn) {
+    deloadBtn.addEventListener('click', () => {
+      const exName = document.getElementById('deload-exercise-select').value;
+      if (confirm(`Are you sure you want to deload ${exName} by 10%?`)) {
+        const currentW = state.currentWeights[exName] || DEFAULT_WEIGHTS[exName];
+        const increment = state.settings.unit === 'kg' ? 2.5 : 5;
+        let deloadedW = currentW * 0.9;
+        deloadedW = Math.round(deloadedW / increment) * increment;
+        state.currentWeights[exName] = deloadedW;
+        saveStateToStorage();
+        alert(`${exName} working weight decreased from ${currentW} to ${deloadedW}.`);
+        checkDeloadRecommendation();
+      }
+    });
+  }
+
+  // --- Deload Warning Banner Handlers ---
+  const applyDeloadBtn = document.getElementById('btn-apply-deload');
+  if (applyDeloadBtn) {
+    applyDeloadBtn.addEventListener('click', () => {
+      const banner = document.getElementById('deload-alert-banner');
+      const exName = banner.getAttribute('data-recommended-exercise');
+      if (exName) {
+        const currentW = state.currentWeights[exName] || DEFAULT_WEIGHTS[exName];
+        const increment = state.settings.unit === 'kg' ? 2.5 : 5;
+        let deloadedW = currentW * 0.9;
+        deloadedW = Math.round(deloadedW / increment) * increment;
+        state.currentWeights[exName] = deloadedW;
+        saveStateToStorage();
+        alert(`Deload applied! ${exName} working weight decreased from ${currentW} to ${deloadedW}.`);
+        banner.classList.add('hidden');
+      }
+    });
+  }
+
+  const dismissDeloadBtn = document.getElementById('btn-dismiss-deload');
+  if (dismissDeloadBtn) {
+    dismissDeloadBtn.addEventListener('click', () => {
+      document.getElementById('deload-alert-banner').classList.add('hidden');
+    });
+  }
+
+  // --- Chart Overlay Toggles & Close ---
+  const chartWeightCb = document.getElementById('chart-show-weight');
+  if (chartWeightCb) chartWeightCb.addEventListener('change', renderProgressChart);
+  const chartE1rmCb = document.getElementById('chart-show-e1rm');
+  if (chartE1rmCb) chartE1rmCb.addEventListener('change', renderProgressChart);
+  const chartVolumeCb = document.getElementById('chart-show-volume');
+  if (chartVolumeCb) chartVolumeCb.addEventListener('change', renderProgressChart);
+  const chartRepsCb = document.getElementById('chart-show-reps');
+  if (chartRepsCb) chartRepsCb.addEventListener('change', renderProgressChart);
+  
+  const closeDetailsBtn = document.getElementById('btn-close-chart-details');
+  if (closeDetailsBtn) {
+    closeDetailsBtn.addEventListener('click', () => {
+      document.getElementById('chart-point-details-card').classList.add('hidden');
+    });
+  }
+
+  // --- Workout Customizer Modal Handlers ---
+  let currentModalWorkout = 'Workout A';
+  const addExA = document.getElementById('btn-add-ex-a');
+  if (addExA) {
+    addExA.addEventListener('click', () => {
+      currentModalWorkout = 'Workout A';
+      document.getElementById('add-exercise-modal').classList.remove('hidden');
+    });
+  }
+  const addExB = document.getElementById('btn-add-ex-b');
+  if (addExB) {
+    addExB.addEventListener('click', () => {
+      currentModalWorkout = 'Workout B';
+      document.getElementById('add-exercise-modal').classList.remove('hidden');
+    });
+  }
+  const modalCancel = document.getElementById('btn-modal-cancel');
+  if (modalCancel) {
+    modalCancel.addEventListener('click', () => {
+      document.getElementById('add-exercise-modal').classList.add('hidden');
+    });
+  }
+  const modalAdd = document.getElementById('btn-modal-add');
+  if (modalAdd) {
+    modalAdd.addEventListener('click', () => {
+      const name = document.getElementById('modal-exercise-select').value;
+      const sets = parseInt(document.getElementById('modal-sets-input').value, 10) || 5;
+      const reps = parseInt(document.getElementById('modal-reps-input').value, 10) || 5;
+      
+      if (!state.settings.workoutTemplates) {
+        state.settings.workoutTemplates = { 'Workout A': [], 'Workout B': [] };
+      }
+      state.settings.workoutTemplates[currentModalWorkout].push({ name, sets, reps });
+      saveStateToStorage();
+      
+      document.getElementById('add-exercise-modal').classList.add('hidden');
+      renderWorkoutTemplates();
+      updateWorkoutSuggestion();
+    });
+  }
+
+  // --- Notification Scheduler Setup ---
+  const schedFrequency = document.getElementById('setting-reminder-frequency');
+  const schedDaysSelector = document.getElementById('reminder-days-selector');
+  if (schedFrequency) {
+    schedFrequency.addEventListener('change', (e) => {
+      if (!state.settings.schedule) state.settings.schedule = { frequency: '3x', days: [1, 3, 5] };
+      state.settings.schedule.frequency = e.target.value;
+      if (e.target.value === 'days') {
+        schedDaysSelector.style.display = 'flex';
+      } else {
+        schedDaysSelector.style.display = 'none';
+      }
+      saveStateToStorage();
+    });
+  }
+
+  document.querySelectorAll('#reminder-days-selector .day-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const day = parseInt(e.target.getAttribute('data-day'), 10);
+      if (!state.settings.schedule) state.settings.schedule = { frequency: '3x', days: [1, 3, 5] };
+      const days = state.settings.schedule.days || [];
+      const index = days.indexOf(day);
+      if (index > -1) {
+        days.splice(index, 1);
+        e.target.classList.remove('active');
+      } else {
+        days.push(day);
+        e.target.classList.add('active');
+      }
+      state.settings.schedule.days = days.sort();
+      saveStateToStorage();
+    });
+  });
+
+  // Populate Schedule UI initially
+  const sched = state.settings.schedule || { frequency: '3x', days: [1, 3, 5] };
+  if (schedFrequency) schedFrequency.value = sched.frequency;
+  if (schedDaysSelector) {
+    schedDaysSelector.style.display = sched.frequency === 'days' ? 'flex' : 'none';
+  }
+  document.querySelectorAll('#reminder-days-selector .day-btn').forEach(btn => {
+    const day = parseInt(btn.getAttribute('data-day'), 10);
+    if (sched.days.includes(day)) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // Render template customizer lists
+  renderWorkoutTemplates();
 
   // Initial runs
   updateWorkoutSuggestion();
   renderHistory();
   renderCalendar();
+  checkDeloadRecommendation();
+
+  // --- App Shortcut Intent Deep Link Handler ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const action = urlParams.get('action');
+  if (action === 'start_workout') {
+    const lastWorkoutName = state.workoutHistory.length > 0 ? state.workoutHistory[0].workoutName : 'Workout B';
+    const nextWorkoutName = lastWorkoutName === 'Workout A' ? 'Workout B' : 'Workout A';
+    initWorkout(nextWorkoutName);
+    showView('tab-workout');
+  } else if (action === 'view_progress') {
+    showView('tab-progress');
+  }
 });
+
+// --- Template Customizer helpers ---
+function renderWorkoutTemplates() {
+  const listA = document.getElementById('template-a-exercises');
+  const listB = document.getElementById('template-b-exercises');
+  if (!listA || !listB) return;
+  
+  listA.innerHTML = '';
+  listB.innerHTML = '';
+
+  const templates = state.settings.workoutTemplates || { 'Workout A': [], 'Workout B': [] };
+
+  templates['Workout A'].forEach((ex, idx) => {
+    const row = document.createElement('div');
+    row.className = 'template-ex-row';
+    row.innerHTML = `
+      <span class="template-ex-name" style="font-weight:600; font-size:0.9rem;">${ex.name}</span>
+      <div class="template-ex-inputs" style="display:flex; align-items:center; gap:5px;">
+        <input type="number" class="form-select form-select-sm" value="${ex.sets}" min="1" max="10" onchange="updateTemplateEx('Workout A', ${idx}, 'sets', this.value)" style="width: 50px; text-align: center; padding: 4px;">
+        <span style="font-size:0.8rem; color:var(--text-secondary);">x</span>
+        <input type="number" class="form-select form-select-sm" value="${ex.reps}" min="1" max="20" onchange="updateTemplateEx('Workout A', ${idx}, 'reps', this.value)" style="width: 50px; text-align: center; padding: 4px;">
+      </div>
+      <button class="history-delete-btn" onclick="deleteTemplateEx('Workout A', ${idx})">🗑️</button>
+    `;
+    listA.appendChild(row);
+  });
+
+  templates['Workout B'].forEach((ex, idx) => {
+    const row = document.createElement('div');
+    row.className = 'template-ex-row';
+    row.innerHTML = `
+      <span class="template-ex-name" style="font-weight:600; font-size:0.9rem;">${ex.name}</span>
+      <div class="template-ex-inputs" style="display:flex; align-items:center; gap:5px;">
+        <input type="number" class="form-select form-select-sm" value="${ex.sets}" min="1" max="10" onchange="updateTemplateEx('Workout B', ${idx}, 'sets', this.value)" style="width: 50px; text-align: center; padding: 4px;">
+        <span style="font-size:0.8rem; color:var(--text-secondary);">x</span>
+        <input type="number" class="form-select form-select-sm" value="${ex.reps}" min="1" max="20" onchange="updateTemplateEx('Workout B', ${idx}, 'reps', this.value)" style="width: 50px; text-align: center; padding: 4px;">
+      </div>
+      <button class="history-delete-btn" onclick="deleteTemplateEx('Workout B', ${idx})">🗑️</button>
+    `;
+    listB.appendChild(row);
+  });
+}
+
+window.updateTemplateEx = function(workoutName, index, field, value) {
+  const val = parseInt(value, 10);
+  if (val > 0) {
+    state.settings.workoutTemplates[workoutName][index][field] = val;
+    saveStateToStorage();
+    updateWorkoutSuggestion();
+  }
+};
+
+window.deleteTemplateEx = function(workoutName, index) {
+  state.settings.workoutTemplates[workoutName].splice(index, 1);
+  saveStateToStorage();
+  renderWorkoutTemplates();
+  updateWorkoutSuggestion();
+};

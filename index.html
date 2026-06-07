@@ -90,6 +90,17 @@
                 </ul>
               </button>
             </div>
+            <!-- Deload Recommendation Banner -->
+            <div class="alert alert-info hidden" id="deload-alert-banner" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
+              <div>
+                <strong style="color: var(--warning-color);">⚠️ Deload Recommendation:</strong>
+                <span id="deload-recommendation-text">You missed Squats 3 times in a row. We recommend a 10% deload to rebuild your strength.</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn btn-sm btn-success" id="btn-apply-deload" style="padding: 4px 10px; font-size: 0.75rem;">Apply Deload (-10%)</button>
+                <button class="btn btn-sm btn-outline" id="btn-dismiss-deload" style="padding: 4px 10px; font-size: 0.75rem;">Dismiss</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -110,7 +121,33 @@
           <div class="exercises-container" id="exercises-list">
             <!-- Dynamic active exercises here -->
           </div>
-        </div>
+
+          <!-- Session Notes & Exertion (RPE) -->
+          <div class="glass-card active-workout-footer" style="margin-top: 16px;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 12px; font-family: var(--font-mono); color: var(--primary-color);">Session Summary</h3>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Rate Difficulty (RPE)</label>
+                <div class="rpe-selectors" id="session-rpe-container" style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+                  <button class="rpe-btn" data-rpe="1">1</button>
+                  <button class="rpe-btn" data-rpe="2">2</button>
+                  <button class="rpe-btn" data-rpe="3">3</button>
+                  <button class="rpe-btn" data-rpe="4">4</button>
+                  <button class="rpe-btn" data-rpe="5">5</button>
+                  <button class="rpe-btn" data-rpe="6">6</button>
+                  <button class="rpe-btn" data-rpe="7">7</button>
+                  <button class="rpe-btn active" data-rpe="8">8</button>
+                  <button class="rpe-btn" data-rpe="9">9</button>
+                  <button class="rpe-btn" data-rpe="10">10</button>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;" id="rpe-label-hint">RPE 8: Hard, 1–2 reps left in reserve</div>
+              </div>
+              <div>
+                <label for="session-notes-input" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Workout Notes</label>
+                <textarea id="session-notes-input" class="form-textarea" placeholder="How did it feel? Any modifications, pain, etc.?" style="width: 100%; min-height: 80px; margin-top: 6px; background: rgba(120, 120, 120, 0.08); border: 1px solid var(--panel-border); border-radius: 12px; color: var(--text-color); padding: 10px; font-family: var(--font-main); resize: vertical; outline: none;"></textarea>
+              </div>
+            </div>
+          </div>
       </section>
 
       <!-- History Tab (List view) -->
@@ -178,19 +215,19 @@
 
             <div class="checkbox-metrics-row">
               <label class="check-container">
-                <input type="radio" name="metric" value="weight" checked>
+                <input type="checkbox" id="chart-show-weight" checked>
                 <span class="checkmark"></span> Weight
               </label>
               <label class="check-container">
-                <input type="radio" name="metric" value="e1rm">
+                <input type="checkbox" id="chart-show-e1rm" checked>
                 <span class="checkmark"></span> e1RM
               </label>
               <label class="check-container">
-                <input type="radio" name="metric" value="volume">
+                <input type="checkbox" id="chart-show-volume" checked>
                 <span class="checkmark"></span> Volume
               </label>
               <label class="check-container">
-                <input type="radio" name="metric" value="reps">
+                <input type="checkbox" id="chart-show-reps" checked>
                 <span class="checkmark"></span> Reps
               </label>
             </div>
@@ -198,6 +235,23 @@
 
           <div class="chart-wrapper">
             <canvas id="progress-chart"></canvas>
+          </div>
+
+          <!-- Chart Date Details Card -->
+          <div class="glass-card hidden" id="chart-point-details-card" style="margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; margin-bottom: 12px;">
+              <h3 id="chart-detail-date" style="font-size: 1.1rem; color: var(--primary-color); font-family: var(--font-mono);">Workout Details</h3>
+              <button class="history-delete-btn" id="btn-close-chart-details" style="font-size: 0.8rem; padding: 2px 6px; border: 1px solid var(--panel-border); border-radius: 6px;">Close</button>
+            </div>
+            <div id="chart-detail-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;">
+              <!-- Dynamically populated stats -->
+            </div>
+            <div id="chart-detail-exercises" style="margin-bottom: 10px; font-size: 0.9rem; line-height: 1.4;">
+              <!-- Exercises sets log -->
+            </div>
+            <div id="chart-detail-notes" style="font-size: 0.85rem; color: var(--text-secondary); padding-top: 4px;">
+              <!-- Notes and RPE -->
+            </div>
           </div>
         </div>
       </section>
@@ -234,6 +288,26 @@
               <button class="btn btn-outline btn-sm" id="btn-toggle-theme">Toggle Theme</button>
             </div>
 
+            <!-- Color Gradient Theme -->
+            <div class="settings-item" style="flex-direction: column; align-items: stretch; gap: 12px; border-bottom: 1px solid var(--panel-border);">
+              <div class="settings-info">
+                <div class="settings-title">Gradient Theme Accent</div>
+                <div class="settings-desc">Choose a custom primary color gradient.</div>
+              </div>
+              <div class="theme-swatches-grid" id="theme-swatches-grid">
+                <div class="theme-swatch active" data-theme-id="green-cyan" style="background: linear-gradient(135deg, #00e676, #00b0ff);" title="Green Cyan"></div>
+                <div class="theme-swatch" data-theme-id="pink-purple" style="background: linear-gradient(135deg, #ec4899, #8b5cf6);" title="Pink Purple"></div>
+                <div class="theme-swatch" data-theme-id="orange-red" style="background: linear-gradient(135deg, #f97316, #ef4444);" title="Orange Red"></div>
+                <div class="theme-swatch" data-theme-id="cyberpunk" style="background: linear-gradient(135deg, #ff007f, #00f0ff);" title="Cyberpunk"></div>
+                <div class="theme-swatch" data-theme-id="sunset" style="background: linear-gradient(135deg, #f59e0b, #ec4899);" title="Sunset Gold"></div>
+                <div class="theme-swatch" data-theme-id="crimson" style="background: linear-gradient(135deg, #f43f5e, #be123c);" title="Crimson Rose"></div>
+                <div class="theme-swatch" data-theme-id="emerald" style="background: linear-gradient(135deg, #10b981, #059669);" title="Neon Emerald"></div>
+                <div class="theme-swatch" data-theme-id="sapphire" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);" title="Deep Sapphire"></div>
+                <div class="theme-swatch" data-theme-id="indigo" style="background: linear-gradient(135deg, #6366f1, #a855f7);" title="Electric Indigo"></div>
+                <div class="theme-swatch" data-theme-id="lava" style="background: linear-gradient(135deg, #ff4e50, #f9d423);" title="Lava Burst"></div>
+              </div>
+            </div>
+
             <!-- Rest Timer Settings -->
             <div class="settings-item">
               <div class="settings-info">
@@ -267,16 +341,36 @@
               </div>
             </div>
 
-            <!-- Reminders Toggle -->
-            <div class="settings-item">
+            <!-- Detailed Workout Reminders -->
+            <div class="settings-item" style="flex-direction: column; align-items: stretch; gap: 12px;">
               <div class="settings-info">
-                <div class="settings-title">Workout Reminders</div>
-                <div class="settings-desc">Get notifications on scheduled lifting days.</div>
+                <div class="settings-title">Workout Reminders & Scheduler</div>
+                <div class="settings-desc">Schedule weekly days or dynamic interval alerts.</div>
               </div>
-              <label class="switch">
-                <input type="checkbox" id="setting-reminder-toggle">
-                <span class="slider"></span>
-              </label>
+              <div class="settings-action-row" style="width: 100%; justify-content: space-between;">
+                <label class="switch">
+                  <input type="checkbox" id="setting-reminder-toggle">
+                  <span class="slider"></span>
+                </label>
+                <select id="setting-reminder-frequency" class="form-select form-select-sm">
+                  <option value="days">Specific Days</option>
+                  <option value="2x">2x / week</option>
+                  <option value="3x" selected>3x / week</option>
+                  <option value="4x">4x / week</option>
+                  <option value="5x">5x / week</option>
+                  <option value="6x">6x / week</option>
+                  <option value="every3">Every 3 days</option>
+                </select>
+              </div>
+              <div class="reminder-days-selector" id="reminder-days-selector" style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px;">
+                <button class="day-btn" data-day="0">S</button>
+                <button class="day-btn active" data-day="1">M</button>
+                <button class="day-btn" data-day="2">T</button>
+                <button class="day-btn active" data-day="3">W</button>
+                <button class="day-btn" data-day="4">T</button>
+                <button class="day-btn active" data-day="5">F</button>
+                <button class="day-btn" data-day="6">S</button>
+              </div>
             </div>
 
             <!-- Health Connect -->
@@ -295,6 +389,50 @@
                 <div class="settings-desc">Run as a standalone app without browser searchbars.</div>
               </div>
               <button class="btn btn-outline btn-sm" id="btn-pwa-install">Show Steps</button>
+            </div>
+
+            <!-- Trigger Manual Deload -->
+            <div class="settings-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+              <div class="settings-info">
+                <div class="settings-title">Trigger Manual Deload</div>
+                <div class="settings-desc">Select an exercise to manually decrease its working weight by 10%.</div>
+              </div>
+              <div class="settings-action-row" style="width: 100%; justify-content: space-between; gap: 10px;">
+                <select id="deload-exercise-select" class="form-select form-select-sm" style="flex-grow: 1; max-width: 60%;">
+                  <option value="Squat">Squat</option>
+                  <option value="Bench Press">Bench Press</option>
+                  <option value="Barbell Row">Barbell Row</option>
+                  <option value="Overhead Press">Overhead Press</option>
+                  <option value="Deadlift">Deadlift</option>
+                </select>
+                <button class="btn btn-sm btn-danger" id="btn-trigger-manual-deload">Deload 10%</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Workout Template Editor -->
+        <div class="glass-card">
+          <h2>Workout Template Customizer</h2>
+          <p class="subtitle">Customize sets, reps, and exercise selection for Workout A & B.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- Workout A Template Customizer -->
+            <div style="border-bottom: 1px solid var(--panel-border); padding-bottom: 15px;">
+              <h3 style="font-family: var(--font-mono); margin-bottom: 10px; color: var(--primary-color);">Workout A</h3>
+              <div class="template-exercises-list" id="template-a-exercises" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                <!-- Populate dynamically via JS -->
+              </div>
+              <button class="btn btn-sm btn-outline" id="btn-add-ex-a">+ Add Exercise</button>
+            </div>
+
+            <!-- Workout B Template Customizer -->
+            <div style="padding-bottom: 5px;">
+              <h3 style="font-family: var(--font-mono); margin-bottom: 10px; color: var(--primary-color);">Workout B</h3>
+              <div class="template-exercises-list" id="template-b-exercises" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                <!-- Populate dynamically via JS -->
+              </div>
+              <button class="btn btn-sm btn-outline" id="btn-add-ex-b">+ Add Exercise</button>
             </div>
           </div>
         </div>
@@ -340,6 +478,47 @@
           <button class="btn btn-sm btn-outline" id="timer-btn-plus">+30s</button>
           <button class="btn btn-sm btn-danger" id="timer-btn-skip">Skip</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Exercise Modal / Popup Overlay -->
+  <div class="modal-overlay hidden" id="add-exercise-modal">
+    <div class="glass-card modal-content" style="max-width: 400px; width: 90%; margin: 100px auto; position: relative; z-index: 1100;">
+      <h3 style="font-family: var(--font-mono); margin-bottom: 12px; color: var(--primary-color);">Add Exercise</h3>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+        <label for="modal-exercise-select" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Select Exercise</label>
+        <select id="modal-exercise-select" class="form-select">
+          <option value="Squat">Squat</option>
+          <option value="Bench Press">Bench Press</option>
+          <option value="Barbell Row">Barbell Row</option>
+          <option value="Overhead Press">Overhead Press</option>
+          <option value="Deadlift">Deadlift</option>
+          <option value="Sit Up">Sit Up</option>
+          <option value="Dips">Dips</option>
+          <option value="Plank">Plank</option>
+          <option value="Incline Bench">Incline Bench</option>
+          <option value="Pullups">Pullups</option>
+          <option value="Dumbbell Bench Press">Dumbbell Bench Press</option>
+          <option value="Skull Crushers">Skull Crushers</option>
+          <option value="Barbell Curl">Barbell Curl</option>
+          <option value="Standing Calf Raise">Standing Calf Raise</option>
+          <option value="Pallof Press">Pallof Press</option>
+        </select>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label for="modal-sets-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Sets</label>
+            <input type="number" id="modal-sets-input" value="5" min="1" max="10" class="form-select" style="width: 100%;">
+          </div>
+          <div>
+            <label for="modal-reps-input" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Reps</label>
+            <input type="number" id="modal-reps-input" value="5" min="1" max="20" class="form-select" style="width: 100%;">
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button class="btn btn-sm btn-outline" id="btn-modal-cancel">Cancel</button>
+        <button class="btn btn-sm btn-success" id="btn-modal-add">Add</button>
       </div>
     </div>
   </div>
