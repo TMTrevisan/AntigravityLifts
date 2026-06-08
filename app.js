@@ -208,6 +208,56 @@ function exportHistoryToCSV() {
   document.body.removeChild(link);
 }
 
+function shareWorkoutSummary(workoutObj) {
+  let totalWorkoutVolume = 0;
+  let prsList = [];
+  let emojiSummary = '';
+
+  workoutObj.exercises.forEach(ex => {
+    let exReps = 0;
+    ex.sets.forEach(r => {
+      if (r !== null && r > 0) {
+        totalWorkoutVolume += (ex.weight * r);
+        exReps += r;
+      }
+    });
+
+    const targetReps = ex.targetReps || 5;
+    const allSetsSuccessful = ex.sets.every(r => r === targetReps);
+    const successEmoji = allSetsSuccessful ? '🟩' : '🟨';
+    const prText = ex.isPR ? ' (PR! 🏆)' : '';
+    if (ex.isPR) prsList.push(ex.name);
+
+    const successFraction = ex.sets.map(s => s === null ? '-' : s).join('/');
+    emojiSummary += `${successEmoji} ${ex.name}: ${successFraction} @ ${ex.weight}${state.settings.unit === 'kg' ? 'kg' : 'lb'}${prText}\n`;
+  });
+
+  const durationMinutes = Math.round(parseFloat(workoutObj.duration) * 60);
+  const formattedDate = new Date(workoutObj.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
+  const prAnnounce = prsList.length > 0 ? `🏆 New PRs in: ${prsList.join(', ')}!\n` : '';
+
+  const shareText = `🏋️‍♂️ Logged ${workoutObj.workoutName} on AntigravityLifts!
+📅 ${formattedDate} (${durationMinutes} mins)
+💪 Total Volume: ${formatWeight(totalWorkoutVolume)}
+${prAnnounce}
+${emojiSummary}
+Check it out at: ${window.location.origin}`;
+
+  if (navigator.share) {
+    navigator.share({
+      title: 'Workout Logged!',
+      text: shareText
+    }).catch(err => console.log('Error sharing:', err));
+  } else {
+    navigator.clipboard.writeText(shareText).then(() => {
+      alert("Workout summary copied to clipboard! Share it with your friends. 📋");
+    }).catch(err => {
+      console.error('Failed to copy text:', err);
+    });
+  }
+}
+
 function calculateStreak() {
   const history = state.workoutHistory || [];
   if (history.length === 0) return { weeks: 0, count: 0 };
@@ -940,6 +990,7 @@ async function finishWorkout() {
     console.error('Failed to show workout summary modal:', err);
   }
 
+  state.lastFinishedWorkout = workoutObj;
   state.activeWorkout = null;
   stopRestTimer();
   const timerWidget = document.getElementById('rest-timer-widget');
@@ -2112,6 +2163,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (summaryCloseBtn) {
     summaryCloseBtn.addEventListener('click', () => {
       document.getElementById('workout-summary-modal').classList.add('hidden');
+    });
+  }
+
+  const summaryShareBtn = document.getElementById('btn-summary-share');
+  if (summaryShareBtn) {
+    summaryShareBtn.addEventListener('click', () => {
+      if (state.lastFinishedWorkout) {
+        shareWorkoutSummary(state.lastFinishedWorkout);
+      }
     });
   }
 
