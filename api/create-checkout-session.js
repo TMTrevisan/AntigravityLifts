@@ -15,11 +15,46 @@ module.exports = async (req, res) => {
 
     const origin = req.headers.origin || `https://${req.headers.host}`;
     
+    // Resolve Stripe Price ID
+    let priceId = process.env.STRIPE_PRICE_ID;
+
+    // Self-healing: if no custom price ID is configured, query/create it dynamically on this Stripe account
+    if (!priceId || priceId === 'price_1Tg9mtHcC62WgOkjTrYcd1Oa') {
+      const prices = await stripe.prices.list({
+        lookup_keys: ['antigravitylifts_monthly'],
+        active: true,
+        limit: 1
+      });
+
+      if (prices.data.length > 0) {
+        priceId = prices.data[0].id;
+      } else {
+        // Create product
+        const product = await stripe.products.create({
+          name: 'AntigravityLifts Premium',
+          description: 'Unlock anti-gravity strength with unlimited custom templates, streak badges, PR tracking, and cloud sync.'
+        });
+
+        // Create price
+        const price = await stripe.prices.create({
+          product: product.id,
+          unit_amount: 499,
+          currency: 'usd',
+          recurring: { interval: 'month' },
+          lookup_key: 'antigravitylifts_monthly',
+          transfer_lookup_key: true
+        });
+
+        priceId = price.id;
+        console.log(`Self-healed: Automatically created product & price ${priceId} on Stripe account.`);
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [
         {
-          price: process.env.STRIPE_PRICE_ID || 'price_1Tg9mtHcC62WgOkjTrYcd1Oa',
+          price: priceId,
           quantity: 1,
         },
       ],
