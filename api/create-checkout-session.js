@@ -19,7 +19,7 @@ module.exports = async (req, res) => {
       mode: 'subscription',
       line_items: [
         {
-          price: 'price_1Tg9mtHcC62WgOkjTrYcd1Oa',
+          price: process.env.STRIPE_PRICE_ID || 'price_1Tg9mtHcC62WgOkjTrYcd1Oa',
           quantity: 1,
         },
       ],
