@@ -70,7 +70,8 @@ let state = {
   calendarDate: new Date(),
   chartInstance: null,
   supabaseClient: null,
-  currentUserSession: null
+  currentUserSession: null,
+  subscription: null
 };
 
 function applyGradientTheme(themeId) {
@@ -1942,6 +1943,7 @@ function initSupabase() {
         }
 
         syncAllWorkoutsWithCloud();
+        checkSubscriptionStatus();
       } else {
         if (statusEl) {
           statusEl.textContent = 'Status: Disconnected';
@@ -1957,6 +1959,9 @@ function initSupabase() {
         if (headerLoginBtn) headerLoginBtn.classList.remove('hidden');
         if (headerProfileBadge) headerProfileBadge.classList.add('hidden');
         if (avatarEl) avatarEl.textContent = '👤';
+
+        state.subscription = null;
+        updateSubscriptionUI();
       }
     });
   } catch (err) {
@@ -1965,6 +1970,141 @@ function initSupabase() {
     if (statusEl) {
       statusEl.textContent = 'Status: Connection Configuration Error';
     }
+  }
+}
+
+async function checkSubscriptionStatus() {
+  if (!state.supabaseClient || !state.currentUserSession) {
+    state.subscription = null;
+    updateSubscriptionUI();
+    return;
+  }
+
+  try {
+    const { data, error } = await state.supabaseClient
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', state.currentUserSession.user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    state.subscription = data;
+    updateSubscriptionUI();
+  } catch (err) {
+    console.error('Error checking subscription status:', err);
+    state.subscription = null;
+    updateSubscriptionUI();
+  }
+}
+
+function updateSubscriptionUI() {
+  const card = document.getElementById('subscription-card');
+  const badge = document.getElementById('premium-status-badge');
+  const desc = document.getElementById('premium-status-desc');
+  const actionContainer = document.getElementById('premium-action-container');
+
+  if (!card) return;
+
+  if (!state.currentUserSession) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = 'block';
+
+  const sub = state.subscription;
+  const isPremiumActive = sub && (sub.status === 'active' || sub.status === 'trialing');
+
+  if (isPremiumActive) {
+    badge.textContent = 'Premium Active';
+    badge.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+    badge.style.color = '#fff';
+    
+    const nextBill = new Date(sub.current_period_end).toLocaleDateString(undefined, {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+    desc.innerHTML = `Thank you for being a premium member! Your subscription status is <strong>${sub.status}</strong>. ${sub.cancel_at_period_end ? 'Expires' : 'Renews'} on: <strong>${nextBill}</strong>.`;
+
+    actionContainer.innerHTML = `
+      <button class="btn btn-outline" id="btn-manage-subscription" style="width: 100%; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        💳 Manage Subscription / Billing Portal
+      </button>
+    `;
+
+    document.getElementById('btn-manage-subscription').addEventListener('click', async () => {
+      try {
+        const btn = document.getElementById('btn-manage-subscription');
+        btn.textContent = 'Opening Customer Portal...';
+        btn.disabled = true;
+
+        const response = await fetch('/api/create-portal-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscriptionId: sub.id })
+        });
+        const resData = await response.json();
+        if (resData.url) {
+          window.location.href = resData.url;
+        } else {
+          alert('Failed to launch portal: ' + (resData.error || 'Unknown error'));
+          btn.textContent = '💳 Manage Subscription';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Failed to connect to billing portal.');
+        const btn = document.getElementById('btn-manage-subscription');
+        if (btn) {
+          btn.textContent = '💳 Manage Subscription';
+          btn.disabled = false;
+        }
+      }
+    });
+  } else {
+    badge.textContent = 'Free Version';
+    badge.style.background = 'rgba(255,255,255,0.08)';
+    badge.style.color = 'var(--text-secondary)';
+    
+    desc.textContent = 'Access premium features like unlimited custom workout templates, PR tracking badges, streak achievements, and automatic cloud sync.';
+
+    actionContainer.innerHTML = `
+      <button class="btn btn-primary" id="btn-upgrade-premium" style="background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; width: 100%; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        🚀 Upgrade to Premium - $4.99/mo (7-day Trial)
+      </button>
+    `;
+
+    document.getElementById('btn-upgrade-premium').addEventListener('click', async () => {
+      try {
+        const btn = document.getElementById('btn-upgrade-premium');
+        btn.textContent = 'Preparing checkout...';
+        btn.disabled = true;
+
+        const response = await fetch('/api/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: state.currentUserSession.user.id,
+            email: state.currentUserSession.user.email
+          })
+        });
+        const resData = await response.json();
+        if (resData.url) {
+          window.location.href = resData.url;
+        } else {
+          alert('Failed to launch checkout: ' + (resData.error || 'Unknown error'));
+          btn.innerHTML = '🚀 Upgrade to Premium - $4.99/mo (7-day Trial)';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Failed to start checkout process.');
+        const btn = document.getElementById('btn-upgrade-premium');
+        if (btn) {
+          btn.innerHTML = '🚀 Upgrade to Premium - $4.99/mo (7-day Trial)';
+          btn.disabled = false;
+        }
+      }
+    });
   }
 }
 

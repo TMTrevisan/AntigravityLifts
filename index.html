@@ -257,6 +257,20 @@
 
       <!-- Settings Tab -->
       <section id="tab-settings" class="tab-content hidden">
+        <!-- Subscription Billing Card -->
+        <div class="glass-card" id="subscription-card" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.05), rgba(139, 92, 246, 0.05)); border: 1px solid rgba(139, 92, 246, 0.2); display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="margin: 0; color: var(--primary-color);">AntigravityLifts Premium</h2>
+            <span class="badge" id="premium-status-badge" style="background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Free Version</span>
+          </div>
+          <p class="subtitle" id="premium-status-desc" style="margin-bottom: 16px;">Access anti-gravity lifting with unlimited templates, streak badges, PR tracking, and cloud sync.</p>
+          <div id="premium-action-container">
+            <button class="btn btn-primary" id="btn-upgrade-premium" style="background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; width: 100%; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              🚀 Upgrade to Premium - $4.99/mo (7-day Trial)
+            </button>
+          </div>
+        </div>
+
         <!-- Supabase Cloud Sync -->
         <div class="glass-card">
           <h2>Cloud Synchronization</h2>
