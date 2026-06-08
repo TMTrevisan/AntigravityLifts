@@ -340,6 +340,20 @@
               </div>
             </div>
 
+            <!-- Volume Metric Choice -->
+            <div class="settings-item">
+              <div class="settings-info">
+                <div class="settings-title">Overview Volume Metric</div>
+                <div class="settings-desc">Choose the volume type shown on your dashboard.</div>
+              </div>
+              <select id="setting-volume-metric" class="form-select form-select-sm" style="max-width: 50%;">
+                <option value="lifetime" selected>Lifetime Cumulative</option>
+                <option value="last">Last Workout</option>
+                <option value="weekly">Weekly Average</option>
+                <option value="monthly">Monthly Average</option>
+              </select>
+            </div>
+
             <!-- Detailed Workout Reminders -->
             <div class="settings-item" style="flex-direction: column; align-items: stretch; gap: 12px;">
               <div class="settings-info">
@@ -438,18 +452,23 @@
 
         <!-- CSV Section -->
         <div class="glass-card">
-          <h2>Import Workout History (CSV)</h2>
-          <p class="subtitle">Upload historical CSV logs to sync dates, weights, and sets.</p>
-          <div class="drop-zone" id="csv-drop-zone">
-            <span class="drop-icon">📄</span>
-            <p>Drag & drop your CSV file here, or click to browse</p>
-            <input type="file" id="csv-file-input" accept=".csv" class="hidden">
-          </div>
-          <div class="import-preview hidden" id="import-preview">
-            <div class="alert alert-info">
-              <span id="import-status-text">Loaded file...</span>
+          <h2>Backup & Restore History (CSV)</h2>
+          <p class="subtitle">Import or export your workout logs to keep secure offline backups.</p>
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="drop-zone" id="csv-drop-zone" style="margin-bottom: 0;">
+              <span class="drop-icon">📤</span>
+              <p>Drag & drop your CSV file here, or click to browse</p>
+              <input type="file" id="csv-file-input" accept=".csv" class="hidden">
             </div>
-            <button class="btn btn-primary" id="btn-confirm-import">Process & Import Workouts</button>
+            <div class="import-preview hidden" id="import-preview">
+              <div class="alert alert-info">
+                <span id="import-status-text">Loaded file...</span>
+              </div>
+              <button class="btn btn-primary" id="btn-confirm-import" style="width: 100%;">Process & Import Workouts</button>
+            </div>
+            <button class="btn btn-outline" id="btn-export-csv" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              📥 Export History to CSV
+            </button>
           </div>
         </div>
 

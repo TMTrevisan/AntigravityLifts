@@ -147,6 +147,183 @@ function deduplicateWorkoutHistory() {
   saveStateToStorage();
 }
 
+function exportHistoryToCSV() {
+  const history = state.workoutHistory || [];
+  if (history.length === 0) {
+    alert("No workouts logged to export!");
+    return;
+  }
+
+  const unitText = state.settings.unit === 'kg' ? 'kgs' : 'lbs';
+  const headers = [
+    'Date', 'Workout Name', 'Exercise', 'Duration',
+    'Set 1 (reps)', `Set 1 (${unitText})`,
+    'Set 2 (reps)', `Set 2 (${unitText})`,
+    'Set 3 (reps)', `Set 3 (${unitText})`,
+    'Set 4 (reps)', `Set 4 (${unitText})`,
+    'Set 5 (reps)', `Set 5 (${unitText})`
+  ];
+
+  const csvRows = [headers.join(',')];
+
+  history.forEach(w => {
+    const durationHrs = parseFloat(w.duration || 1.0);
+    const totalMins = Math.round(durationHrs * 60);
+    const hrs = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    const durationStr = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:00`;
+
+    w.exercises.forEach(ex => {
+      const row = [
+        `"${w.date}"`,
+        `"${w.workoutName || 'Workout A'}"`,
+        `"${ex.name}"`,
+        `"${durationStr}"`
+      ];
+
+      for (let s = 0; s < 5; s++) {
+        const reps = ex.sets[s];
+        if (reps !== undefined && reps !== null && reps !== '') {
+          row.push(reps);
+          row.push(ex.weight);
+        } else {
+          row.push('');
+          row.push('');
+        }
+      }
+
+      csvRows.push(row.join(','));
+    });
+  });
+
+  const csvContent = csvRows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `antigravitylifts_history_${normalizeDate(new Date())}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function calculateStreak() {
+  const history = state.workoutHistory || [];
+  if (history.length === 0) return { weeks: 0, count: 0 };
+
+  const reverseSorted = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  let currentWorkoutStreak = 0;
+  const maxTimeGap = 5 * 24 * 60 * 60 * 1000; // 5 days
+
+  for (let i = 0; i < reverseSorted.length; i++) {
+    const d = new Date(reverseSorted[i].date + 'T00:00:00');
+    if (i === 0) {
+      const diffFromToday = Date.now() - d.getTime();
+      if (diffFromToday > 7 * 24 * 60 * 60 * 1000) {
+        break;
+      }
+      currentWorkoutStreak = 1;
+    } else {
+      const prevD = new Date(reverseSorted[i-1].date + 'T00:00:00');
+      const gap = prevD.getTime() - d.getTime();
+      if (gap <= maxTimeGap) {
+        currentWorkoutStreak++;
+      } else {
+        break;
+      }
+    }
+  }
+
+  const weeksMap = new Map();
+  reverseSorted.forEach(w => {
+    const d = new Date(w.date + 'T00:00:00');
+    const year = d.getFullYear();
+    const oneJan = new Date(year, 0, 1);
+    const numberOfDays = Math.floor((d - oneJan) / (24 * 60 * 60 * 1000));
+    const weekNum = Math.ceil((d.getDay() + 1 + numberOfDays) / 7);
+    const key = `${year}-W${weekNum}`;
+    if (!weeksMap.has(key)) {
+      weeksMap.set(key, []);
+    }
+    weeksMap.get(key).push(d);
+  });
+
+  let weeklyStreak = 0;
+  const today = new Date();
+  const todayYear = today.getFullYear();
+  const todayOneJan = new Date(todayYear, 0, 1);
+  const todayNumberOfDays = Math.floor((today - todayOneJan) / (24 * 60 * 60 * 1000));
+  const todayWeekNum = Math.ceil((today.getDay() + 1 + todayNumberOfDays) / 7);
+
+  let currentYear = todayYear;
+  let currentWeek = todayWeekNum;
+
+  const getPrevWeek = (y, w) => {
+    if (w === 1) {
+      return { y: y - 1, w: 52 };
+    }
+    return { y, w: w - 1 };
+  };
+
+  let checkKey = `${currentYear}-W${currentWeek}`;
+  let hasCurrentWeek = weeksMap.has(checkKey);
+  
+  if (!hasCurrentWeek) {
+    const prev = getPrevWeek(currentYear, currentWeek);
+    currentYear = prev.y;
+    currentWeek = prev.w;
+    checkKey = `${currentYear}-W${currentWeek}`;
+  }
+
+  while (weeksMap.has(checkKey)) {
+    weeklyStreak++;
+    const prev = getPrevWeek(currentYear, currentWeek);
+    currentYear = prev.y;
+    currentWeek = prev.w;
+    checkKey = `${currentYear}-W${currentWeek}`;
+  }
+
+  return {
+    workouts: currentWorkoutStreak,
+    weeks: weeklyStreak
+  };
+}
+
+function renderStreak() {
+  const container = document.getElementById('streak-badge-container');
+  if (!container) return;
+
+  const streak = calculateStreak();
+  if (streak.weeks === 0 && streak.workouts === 0) {
+    container.innerHTML = `
+      <div style="background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); font-size: 0.8rem; color: var(--text-secondary); width: 100%;">
+        Log a workout to start your active streak! ⚡
+      </div>
+    `;
+    return;
+  }
+
+  let streakHTML = '';
+  if (streak.weeks > 0) {
+    streakHTML += `
+      <div class="streak-badge" style="background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); animation: pulse 2s infinite;">
+        <span>🔥</span> ${streak.weeks}-Week Streak
+      </div>
+    `;
+  }
+  if (streak.workouts > 0) {
+    streakHTML += `
+      <div class="streak-badge" style="background: linear-gradient(135deg, #3b82f6, #00f0ff); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); margin-left: 8px;">
+        <span>⚡</span> ${streak.workouts} Active Workouts
+      </div>
+    `;
+  }
+
+  container.innerHTML = streakHTML;
+}
+
 // --- Web Audio Synthesizer for Timer Gong ---
 let audioCtx = null;
 function playGongSound() {
@@ -298,6 +475,7 @@ function showView(viewId) {
 
   if (viewId === 'tab-progress') {
     renderProgressChart();
+    renderStreak();
   }
 }
 
@@ -882,10 +1060,94 @@ function renderHistory() {
   container.innerHTML = '';
   
   if (history.length === 0) {
-    container.innerHTML = `<div style="text-align:center; padding: 20px; color:var(--text-secondary);">No workouts logged yet. Go to Settings to import your history CSV!</div>`;
+    const unitText = state.settings.unit === 'kg' ? 'kg' : 'lbs';
+    const defSq = state.settings.unit === 'kg' ? 20 : 45;
+    const defBP = state.settings.unit === 'kg' ? 20 : 45;
+    const defRow = state.settings.unit === 'kg' ? 30 : 65;
+    const defOHP = state.settings.unit === 'kg' ? 20 : 45;
+    const defDL = state.settings.unit === 'kg' ? 40 : 135;
+
+    container.innerHTML = `
+      <div class="glass-card onboarding-card" style="margin-top: 15px; padding: 24px; animation: fadeInUp 0.4s ease-out; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <span style="font-size: 3rem; display: block; margin-bottom: 10px; animation: bounce 2s infinite;">🚀</span>
+          <h2 style="font-family: var(--font-mono); margin-bottom: 8px; color: var(--primary-color); font-size: 1.6rem;">Welcome to AntigravityLifts!</h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 380px; margin: 0 auto; line-height: 1.4;">Ready to track your 5x5 lifting progress? Set up your starting weights below or import an existing history file.</p>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+          <h3 style="font-size: 0.9rem; margin-bottom: 14px; font-family: var(--font-mono); color: #fff; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px;">1. Configure Starting Weights (${unitText})</h3>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.9rem; font-weight: 500;">Squat</span>
+              <input type="number" id="onboard-Squat" value="${defSq}" class="form-select form-select-sm" style="width: 90px; text-align: center; font-weight: bold; background: rgba(0,0,0,0.2);">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.9rem; font-weight: 500;">Bench Press</span>
+              <input type="number" id="onboard-Bench-Press" value="${defBP}" class="form-select form-select-sm" style="width: 90px; text-align: center; font-weight: bold; background: rgba(0,0,0,0.2);">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.9rem; font-weight: 500;">Barbell Row</span>
+              <input type="number" id="onboard-Barbell-Row" value="${defRow}" class="form-select form-select-sm" style="width: 90px; text-align: center; font-weight: bold; background: rgba(0,0,0,0.2);">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.9rem; font-weight: 500;">Overhead Press</span>
+              <input type="number" id="onboard-Overhead-Press" value="${defOHP}" class="form-select form-select-sm" style="width: 90px; text-align: center; font-weight: bold; background: rgba(0,0,0,0.2);">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.9rem; font-weight: 500;">Deadlift</span>
+              <input type="number" id="onboard-Deadlift" value="${defDL}" class="form-select form-select-sm" style="width: 90px; text-align: center; font-weight: bold; background: rgba(0,0,0,0.2);">
+            </div>
+          </div>
+          <button class="btn btn-primary" id="btn-onboard-save" style="width: 100%; margin-top: 20px; font-weight: 600; padding: 10px;">Save & Begin Program</button>
+        </div>
+
+        <div style="text-align: center;">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">Already have StrongLifts history data?</p>
+          <button class="btn btn-outline btn-sm" id="btn-onboard-go-csv" style="width: 100%; padding: 8px;">Import History CSV</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-onboard-save').addEventListener('click', () => {
+      state.currentWeights['Squat'] = parseFloat(document.getElementById('onboard-Squat').value);
+      state.currentWeights['Bench Press'] = parseFloat(document.getElementById('onboard-Bench-Press').value);
+      state.currentWeights['Barbell Row'] = parseFloat(document.getElementById('onboard-Barbell-Row').value);
+      state.currentWeights['Overhead Press'] = parseFloat(document.getElementById('onboard-Overhead-Press').value);
+      state.currentWeights['Deadlift'] = parseFloat(document.getElementById('onboard-Deadlift').value);
+      
+      saveStateToStorage();
+      alert("Starting weights configured! Get ready for your first workout.");
+      showView('tab-workout');
+    });
+
+    document.getElementById('btn-onboard-go-csv').addEventListener('click', () => {
+      showView('tab-settings');
+      setTimeout(() => {
+        const zone = document.getElementById('csv-drop-zone');
+        if (zone) zone.scrollIntoView({ behavior: 'smooth' });
+      }, 150);
+    });
+
     statsOverview.innerHTML = '';
     return;
   }
+
+  // Pre-calculate Personal Records (PRs) chronologically
+  const exMaxWeights = {};
+  const chronoHistory = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  chronoHistory.forEach(workout => {
+    workout.exercises.forEach(ex => {
+      const currentMax = exMaxWeights[ex.name] || 0;
+      if (ex.weight > currentMax) {
+        ex.isPR = true;
+        exMaxWeights[ex.name] = ex.weight;
+      } else {
+        ex.isPR = false;
+      }
+    });
+  });
 
   const totalWorkouts = history.length;
   let totalVolume = 0;
@@ -904,6 +1166,50 @@ function renderHistory() {
     });
   });
 
+  // Calculate volume based on the selected metric setting
+  const metric = state.settings.volumeMetric || 'lifetime';
+  let volumeLabel = 'Est. Volume';
+  let displayedVolume = 0;
+
+  if (metric === 'lifetime') {
+    volumeLabel = 'Est. Volume';
+    displayedVolume = totalVolume;
+  } else if (metric === 'last') {
+    volumeLabel = 'Last Vol.';
+    if (history.length > 0) {
+      const lastW = history[0];
+      lastW.exercises.forEach(ex => {
+        ex.sets.forEach(reps => {
+          if (reps && reps > 0) {
+            displayedVolume += ex.weight * reps;
+          }
+        });
+      });
+    }
+  } else if (metric === 'weekly') {
+    volumeLabel = 'Weekly Avg.';
+    const weekKeys = new Set();
+    history.forEach(w => {
+      const d = new Date(w.date + 'T00:00:00');
+      const year = d.getFullYear();
+      const oneJan = new Date(year, 0, 1);
+      const numberOfDays = Math.floor((d - oneJan) / (24 * 60 * 60 * 1000));
+      const weekNum = Math.ceil((d.getDay() + 1 + numberOfDays) / 7);
+      weekKeys.add(`${year}-W${weekNum}`);
+    });
+    const weeksCount = Math.max(1, weekKeys.size);
+    displayedVolume = Math.round(totalVolume / weeksCount);
+  } else if (metric === 'monthly') {
+    volumeLabel = 'Monthly Avg.';
+    const monthKeys = new Set();
+    history.forEach(w => {
+      const d = new Date(w.date + 'T00:00:00');
+      monthKeys.add(`${d.getFullYear()}-${d.getMonth()}`);
+    });
+    const monthsCount = Math.max(1, monthKeys.size);
+    displayedVolume = Math.round(totalVolume / monthsCount);
+  }
+
   statsOverview.innerHTML = `
     <div class="stat-item">
       <div class="stat-label">Workouts</div>
@@ -914,8 +1220,8 @@ function renderHistory() {
       <div class="stat-value">${formatWeight(maxSquat)}</div>
     </div>
     <div class="stat-item">
-      <div class="stat-label">Est. Volume</div>
-      <div class="stat-value">${formatWeight(Math.round(totalVolume))}</div>
+      <div class="stat-label">${volumeLabel}</div>
+      <div class="stat-value">${formatWeight(displayedVolume)}</div>
     </div>
   `;
 
@@ -947,9 +1253,10 @@ function renderHistory() {
       exEl.className = 'history-exercise';
 
       const repsStr = ex.sets.map(r => r === null ? '-' : r).join('-');
+      const prBadge = ex.isPR ? `<span class="pr-badge" style="background: linear-gradient(135deg, #f59e0b, #ec4899); color: #fff; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.05em; display: inline-block;">⭐ PR</span>` : '';
 
       exEl.innerHTML = `
-        <span class="history-ex-name">${ex.name}</span>
+        <span class="history-ex-name">${ex.name}${prBadge}</span>
         <span class="history-ex-sets">${formatWeight(ex.weight)} × ${repsStr}</span>
       `;
       list.appendChild(exEl);
@@ -1756,6 +2063,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize Supabase Client
   initSupabase();
+
+  // Volume Metric Selector Setup
+  const volMetricSelect = document.getElementById('setting-volume-metric');
+  if (volMetricSelect) {
+    volMetricSelect.value = state.settings.volumeMetric || 'lifetime';
+    volMetricSelect.addEventListener('change', (e) => {
+      state.settings.volumeMetric = e.target.value;
+      saveStateToStorage();
+      renderHistory();
+    });
+  }
+
+  // CSV Export Button Setup
+  const exportCsvBtn = document.getElementById('btn-export-csv');
+  if (exportCsvBtn) {
+    exportCsvBtn.addEventListener('click', exportHistoryToCSV);
+  }
 
   document.getElementById('setting-timer-toggle').checked = state.settings.timerEnabled;
   document.getElementById('setting-timer-duration').value = state.settings.timerDuration;
