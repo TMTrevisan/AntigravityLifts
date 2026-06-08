@@ -158,29 +158,46 @@ function playGongSound() {
       audioCtx.resume();
     }
     
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const now = audioCtx.currentTime;
     
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    // Create first chime tone (Fundamental A5)
+    const osc1 = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    osc1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(880, now); // A5
     
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(440, audioCtx.currentTime); 
-    osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 1.5); 
+    // Create second chime tone (Fifth E6) for a pleasant chord
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(audioCtx.destination);
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(1318.51, now); // E6
     
-    gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.0); 
+    // Bell envelope: instant rise, gradual decay
+    gain1.gain.setValueAtTime(0.001, now);
+    gain1.gain.exponentialRampToValueAtTime(0.25, now + 0.04); // fast attack
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 1.2); // smooth decay
     
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 2.0);
+    gain2.gain.setValueAtTime(0.001, now);
+    gain2.gain.exponentialRampToValueAtTime(0.12, now + 0.04); 
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.8); 
+
+    osc1.start(now);
+    osc1.stop(now + 1.3);
+    osc2.start(now);
+    osc2.stop(now + 0.9);
     
+    // Fallback audio element trigger
     const audioEl = document.getElementById('timer-sound');
     if (audioEl) {
       audioEl.currentTime = 0;
       audioEl.play().catch(e => console.log('Audio element play blocked.', e));
     }
   } catch (err) {
-    console.error('Failed to play gong sound:', err);
+    console.error('Failed to play chime sound:', err);
   }
 }
 
@@ -678,6 +695,71 @@ async function finishWorkout() {
   
   if (state.supabaseClient && state.currentUserSession) {
     await syncWorkoutToCloud(workoutObj);
+  }
+
+  // Populate and show workout summary modal
+  try {
+    const summaryDateEl = document.getElementById('summary-workout-date');
+    const summaryVolumeEl = document.getElementById('summary-total-volume');
+    const summarySetsEl = document.getElementById('summary-total-sets');
+    const summaryRepsEl = document.getElementById('summary-total-reps');
+    const summaryDurationEl = document.getElementById('summary-workout-duration');
+    const summaryRpeEl = document.getElementById('summary-workout-rpe');
+    const summaryListEl = document.getElementById('summary-exercises-list');
+
+    let totalWorkoutVolume = 0;
+    let totalWorkoutSets = 0;
+    let totalWorkoutReps = 0;
+
+    summaryListEl.innerHTML = '';
+
+    workoutObj.exercises.forEach(ex => {
+      let exReps = 0;
+      let exSets = 0;
+      ex.sets.forEach(r => {
+        if (r !== null && r > 0) {
+          totalWorkoutVolume += (ex.weight * r);
+          totalWorkoutReps += r;
+          exReps += r;
+          totalWorkoutSets++;
+          exSets++;
+        }
+      });
+
+      const exRow = document.createElement('div');
+      exRow.style.display = 'flex';
+      exRow.style.justify = 'space-between';
+      exRow.style.alignItems = 'center';
+      exRow.style.fontSize = '0.9rem';
+      exRow.style.background = 'rgba(255, 255, 255, 0.04)';
+      exRow.style.padding = '8px 12px';
+      exRow.style.borderRadius = '8px';
+      
+      const successFraction = ex.sets.map(s => s === null ? '-' : s).join('/');
+
+      exRow.innerHTML = `
+        <span style="font-weight: 500; color:#fff;">${ex.name}</span>
+        <span style="color: var(--text-secondary); text-align:right;">${successFraction} @ ${formatWeight(ex.weight)} (${exReps} reps)</span>
+      `;
+      summaryListEl.appendChild(exRow);
+    });
+
+    if (summaryDateEl) {
+      summaryDateEl.textContent = new Date(workoutObj.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    if (summaryVolumeEl) summaryVolumeEl.textContent = formatWeight(totalWorkoutVolume);
+    if (summarySetsEl) summarySetsEl.textContent = totalWorkoutSets;
+    if (summaryRepsEl) summaryRepsEl.textContent = totalWorkoutReps;
+    
+    // Format duration
+    const durationMinutes = Math.round(parseFloat(workoutObj.duration) * 60);
+    if (summaryDurationEl) summaryDurationEl.textContent = durationMinutes > 0 ? `${durationMinutes} mins` : '< 1 min';
+    if (summaryRpeEl) summaryRpeEl.textContent = `${workoutObj.rpe}/10 RPE`;
+
+    // Show modal
+    document.getElementById('workout-summary-modal').classList.remove('hidden');
+  } catch (err) {
+    console.error('Failed to show workout summary modal:', err);
   }
 
   state.activeWorkout = null;
@@ -1463,6 +1545,23 @@ function initSupabase() {
         if (disconnectBtn) {
           disconnectBtn.classList.remove('hidden');
         }
+
+        // Upsert user profile to public.profiles table
+        const profileData = {
+          id: session.user.id,
+          updated_at: new Date().toISOString(),
+          email: session.user.email,
+          full_name: session.user.user_metadata.full_name || session.user.user_metadata.name || '',
+          avatar_url: session.user.user_metadata.avatar_url || session.user.user_metadata.picture || ''
+        };
+        state.supabaseClient
+          .from('profiles')
+          .upsert(profileData)
+          .then(({ error: profErr }) => {
+            if (profErr) {
+              console.warn('Failed to upsert profile in public table:', profErr.message);
+            }
+          });
         
         // Update header UI
         if (headerLoginBtn) headerLoginBtn.classList.add('hidden');
@@ -1685,6 +1784,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-finish-workout').addEventListener('click', finishWorkout);
   document.getElementById('btn-cancel-workout').addEventListener('click', cancelActiveWorkout);
 
+  const summaryCloseBtn = document.getElementById('btn-summary-close');
+  if (summaryCloseBtn) {
+    summaryCloseBtn.addEventListener('click', () => {
+      document.getElementById('workout-summary-modal').classList.add('hidden');
+    });
+  }
+
   // Timer Widget events
   document.getElementById('timer-btn-skip').addEventListener('click', () => {
     stopRestTimer();
@@ -1824,7 +1930,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   document.getElementById('btn-cloud-disconnect').addEventListener('click', handleSignOut);
-  document.getElementById('header-signout-btn').addEventListener('click', handleSignOut);
 
   // CSV Drag and drop zone bindings
   const dropZone = document.getElementById('csv-drop-zone');

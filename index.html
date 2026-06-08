@@ -38,7 +38,6 @@
         <div class="profile-badge hidden" id="header-profile-badge">
           <span class="profile-avatar">👤</span>
           <span class="profile-name" id="header-user-email">User</span>
-          <button class="btn-signout" id="header-signout-btn" title="Sign Out">🚪</button>
         </div>
       </div>
     </header>
@@ -268,7 +267,7 @@
                 Status: Loading connection...
               </div>
               <button class="btn btn-primary" id="btn-cloud-connect">Connect & Sign in with Google</button>
-              <button class="btn btn-outline hidden" id="btn-cloud-disconnect">Disconnect Cloud Sync</button>
+              <button class="btn btn-danger hidden" id="btn-cloud-disconnect">Sign Out</button>
             </div>
           </div>
         </div>
@@ -519,6 +518,51 @@
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
         <button class="btn btn-sm btn-outline" id="btn-modal-cancel">Cancel</button>
         <button class="btn btn-sm btn-success" id="btn-modal-add">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workout Summary Modal -->
+  <div class="modal-overlay hidden" id="workout-summary-modal">
+    <div class="glass-card modal-content" style="max-width: 500px; width: 92%; margin: 50px auto; position: relative; z-index: 1100; max-height: 85vh; overflow-y: auto;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <span style="font-size: 3rem; display: inline-block; animation: popIn 0.5s ease-out;">🏆</span>
+        <h2 style="font-family: var(--font-mono); font-size: 1.8rem; margin: 10px 0 5px; color: var(--primary-color);">Workout Complete!</h2>
+        <p style="color: var(--text-secondary); font-size: 0.9rem;" id="summary-workout-date"></p>
+      </div>
+
+      <!-- Quick Stats Grid -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px;">
+        <div class="stat-item" style="padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; text-align: center;">
+          <div class="stat-label" style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Volume</div>
+          <div class="stat-value" id="summary-total-volume" style="font-size: 1.1rem; font-weight: 700; color: #fff;">0</div>
+        </div>
+        <div class="stat-item" style="padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; text-align: center;">
+          <div class="stat-label" style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Sets</div>
+          <div class="stat-value" id="summary-total-sets" style="font-size: 1.1rem; font-weight: 700; color: #fff;">0</div>
+        </div>
+        <div class="stat-item" style="padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; text-align: center;">
+          <div class="stat-label" style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Reps</div>
+          <div class="stat-value" id="summary-total-reps" style="font-size: 1.1rem; font-weight: 700; color: #fff;">0</div>
+        </div>
+      </div>
+
+      <!-- Workout Details Breakdown -->
+      <div style="margin-bottom: 24px;">
+        <h4 style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.05em; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">Exercise Breakdown</h4>
+        <div id="summary-exercises-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Extra Stats (Duration & RPE) -->
+      <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary); background: rgba(255,255,255,0.02); padding: 10px 14px; border-radius: 8px; margin-bottom: 24px;">
+        <div>Duration: <strong id="summary-workout-duration" style="color: #fff;">0m</strong></div>
+        <div>Rating: <strong id="summary-workout-rpe" style="color: #fff;">8/10 RPE</strong></div>
+      </div>
+
+      <div style="display: flex; justify-content: center;">
+        <button class="btn btn-success" id="btn-summary-close" style="width: 100%; max-width: 200px; padding: 10px 20px; font-weight: 600;">Awesome!</button>
       </div>
     </div>
   </div>
